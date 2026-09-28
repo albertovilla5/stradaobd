@@ -1,0 +1,9 @@
+{
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "editor.tabSize": 4,
+  "files.exclude": {
+    "**/.git": true,
+    "**/.gradle": true,
+    "**/build": true
+  }
+}
