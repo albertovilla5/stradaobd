@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Torque OBD2 Dashboard</string>
+    <string name="tab_sport">Deportivo</string>
+    <string name="tab_digital">Digital HUD</string>
+    <string name="tab_dpf">DPF / Diésel</string>
+    <string name="tab_grid">Monitores</string>
+    <string name="tab_pids">Gestor PIDs</string>
+    <string name="tab_connection">Conexión</string>
+    <string name="tab_terminal">Terminal AT</string>
+</resources>

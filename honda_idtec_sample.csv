@@ -1,0 +1,16 @@
+"Name", "ShortName", "ModeAndPID", "Equation", "Min Value", "Max Value", "Units", "Header"
+; init string: AT SP7\nAT SH DA10F1
+"iDTEC Distance from last DPF regeneration success",         "DPF dist a/reg","0x222512","INT16(V:W)/10",  0,6553,  "km",""
+"iDTEC Fuel consumption from last DPF regeneration success", "DPF fuel a/reg","0x222512","INT16(X:Y)/100", 0,6500,  "l",""
+"iDTEC Elapsed time from last DPF regeneration success",     "DPF time a/reg","0x222512","INT16(Z:AA)*60", 0,365000,"s",""
+
+"iDTEC DPF differential pressure","DPF diff.pres","0x222512","INT16(AH:AI)/100",0,100,"kPa",""
+"iDTEC EGT 1","EGT","0x222512","O*4",0,1000,"°C",""
+"iDTEC calculated PM value","DPF calc PM","0x222512","T*0.3",0,85,"g",""
+
+"iDTEC DPF automatic regeneration control status value","DPF reg.state","0x222512","INT32(AM:AN:AO:AP)",0,4000000000000,"",""
+"iDTEC DPF active regeneration","DPF active reg","0x222512","(AM & 127)+(AN & 207)+AO+(AP & 254)",0,4000000000000,"",""
+
+"iDTEC Engine oil level (filtered)","Eng.oil lvl f","0x222510","AS/2",0,128,"mm",""
+
+"iDTEC DPF Exhaust gas flow (calculated) ?","DPF calc.flow","0x222516","INT16(AB:AC)/10",0,6553,"m3/h",""
