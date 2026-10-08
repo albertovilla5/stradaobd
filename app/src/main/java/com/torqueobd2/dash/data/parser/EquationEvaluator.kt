@@ -14,11 +14,15 @@ object EquationEvaluator {
      * Evalúa una ecuación de Torque Pro a partir de un mapa de variables (bytes A..Z, AA.. etc).
      */
     fun evaluate(equation: String, variables: Map<String, Double>): Double {
-        if (equation.isBlank()) return 0.0
+        require(equation.isNotBlank()) { "Ecuación vacía" }
+        val byteNames = Regex("[A-Za-z][A-Za-z0-9_]*").findAll(equation)
+            .map { it.value.uppercase() }.filter { it !in setOf("INT16", "INT24", "INT32", "SIGNED") }.toSet()
+        require(byteNames.isNotEmpty()) { "La ecuación no utiliza bytes de la ECU" }
+        require(byteNames.all { it in variables }) { "Respuesta incompleta o función no admitida" }
         val preprocessed = preprocessFunctions(equation, variables)
-        val tokens = tokenize(preprocessed)
-        val rpn = toRpn(tokens)
-        return evalRpn(rpn, variables)
+        val result = Parser(tokenize(preprocessed), variables).parse()
+        require(result.isFinite()) { "Resultado no finito" }
+        return result
     }
 
     /**
@@ -107,7 +111,7 @@ object EquationEvaluator {
         val signedRegex = Regex("""SIGNED\s*\(\s*([A-Za-z0-9_]+)\s*\)""", RegexOption.IGNORE_CASE)
         result = signedRegex.replace(result) { mr ->
             val v = mr.groupValues[1]
-            val valNum = vars[v.uppercase()] ?: 0.0
+            val valNum = vars[v.uppercase()] ?: error("Falta el byte $v")
             val signedVal = if (valNum > 127.0) valNum - 256.0 else valNum
             signedVal.toString()
         }
@@ -115,140 +119,68 @@ object EquationEvaluator {
         return result
     }
 
-    // Tokenizador básico
     private fun tokenize(input: String): List<String> {
+        val pattern = Regex("[A-Za-z][A-Za-z0-9_]*|(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)|[()+*/%&|^\\-]")
         val tokens = mutableListOf<String>()
-        var i = 0
-        while (i < input.length) {
-            val c = input[i]
-            when {
-                c.isWhitespace() -> i++
-                c in "()+-*/%&|^" -> {
-                    // Soporte para signos unarios '-' o '+' al inicio o tras otro operador
-                    if ((c == '-' || c == '+') && (tokens.isEmpty() || tokens.last() in "(+-*/%&|^")) {
-                        // Unario: agregar '0' antes del signo para evaluación estándar
-                        tokens.add("0")
-                    }
-                    tokens.add(c.toString())
-                    i++
-                }
-                c.isDigit() || c == '.' -> {
-                    val start = i
-                    while (i < input.length && (input[i].isDigit() || input[i] == '.')) {
-                        i++
-                    }
-                    tokens.add(input.substring(start, i))
-                }
-                c.isLetter() -> {
-                    val start = i
-                    while (i < input.length && (input[i].isLetterOrDigit() || input[i] == '_')) {
-                        i++
-                    }
-                    tokens.add(input.substring(start, i).uppercase())
-                }
-                else -> i++
-            }
+        var end = 0
+        for (match in pattern.findAll(input)) {
+            require(input.substring(end, match.range.first).isBlank()) { "Símbolo desconocido" }
+            tokens.add(match.value.uppercase())
+            end = match.range.last + 1
         }
+        require(input.substring(end).isBlank()) { "Símbolo desconocido" }
         return tokens
     }
 
-    // Shunting-Yard algorithm para RPN (Reverse Polish Notation)
-    private fun toRpn(tokens: List<String>): List<String> {
-        val output = mutableListOf<String>()
-        val stack = ArrayDeque<String>()
+    /** Analizador estricto: una fórmula incompleta o un byte ausente nunca equivale a cero. */
+    private class Parser(private val tokens: List<String>, private val variables: Map<String, Double>) {
+        private var cursor = 0
+        private fun peek(): String? = tokens.getOrNull(cursor)
+        private fun take(): String {
+            require(cursor < tokens.size) { "Falta un operando" }
+            return tokens[cursor++]
+        }
 
-        fun precedence(op: String): Int = when (op) {
-            "|", "^" -> 1
-            "&" -> 2
-            "+", "-" -> 3
-            "*", "/", "%" -> 4
+        fun parse(): Double {
+            val value = expression(1)
+            require(cursor == tokens.size) { "Ecuación incompleta o función no admitida" }
+            return value
+        }
+
+        private fun precedence(op: String?): Int = when (op) {
+            "|" -> 1
+            "^" -> 2
+            "&" -> 3
+            "+", "-" -> 4
+            "*", "/", "%" -> 5
             else -> 0
         }
 
-        for (token in tokens) {
-            when {
-                token.first().isDigit() || token.first().isLetter() -> output.add(token)
-                token == "(" -> stack.addLast(token)
-                token == ")" -> {
-                    while (stack.isNotEmpty() && stack.last() != "(") {
-                        output.add(stack.removeLast())
-                    }
-                    if (stack.isNotEmpty() && stack.last() == "(") {
-                        stack.removeLast()
-                    }
-                }
-                else -> {
-                    while (stack.isNotEmpty() && stack.last() != "(" && precedence(stack.last()) >= precedence(token)) {
-                        output.add(stack.removeLast())
-                    }
-                    stack.addLast(token)
+        private fun expression(minPrecedence: Int): Double {
+            var a = operand()
+            while (precedence(peek()) >= minPrecedence) {
+                val op = take()
+                val b = expression(precedence(op) + 1)
+                a = when (op) {
+                    "+" -> a + b
+                    "-" -> a - b
+                    "*" -> a * b
+                    "/" -> { require(b != 0.0) { "División por cero" }; a / b }
+                    "%" -> { require(b != 0.0) { "División por cero" }; a % b }
+                    "&" -> (a.toLong() and b.toLong()).toDouble()
+                    "|" -> (a.toLong() or b.toLong()).toDouble()
+                    "^" -> (a.toLong() xor b.toLong()).toDouble()
+                    else -> error("Operador desconocido")
                 }
             }
+            return a
         }
-        while (stack.isNotEmpty()) {
-            output.add(stack.removeLast())
-        }
-        return output
-    }
 
-    // Evaluación de RPN
-    private fun evalRpn(rpn: List<String>, variables: Map<String, Double>): Double {
-        val stack = ArrayDeque<Double>()
-
-        for (token in rpn) {
-            when (token) {
-                "+" -> {
-                    val b = stack.removeLastOrNull() ?: 0.0
-                    val a = stack.removeLastOrNull() ?: 0.0
-                    stack.addLast(a + b)
-                }
-                "-" -> {
-                    val b = stack.removeLastOrNull() ?: 0.0
-                    val a = stack.removeLastOrNull() ?: 0.0
-                    stack.addLast(a - b)
-                }
-                "*" -> {
-                    val b = stack.removeLastOrNull() ?: 0.0
-                    val a = stack.removeLastOrNull() ?: 0.0
-                    stack.addLast(a * b)
-                }
-                "/" -> {
-                    val b = stack.removeLastOrNull() ?: 1.0
-                    val a = stack.removeLastOrNull() ?: 0.0
-                    stack.addLast(if (b == 0.0) 0.0 else a / b)
-                }
-                "%" -> {
-                    val b = stack.removeLastOrNull() ?: 1.0
-                    val a = stack.removeLastOrNull() ?: 0.0
-                    stack.addLast(if (b == 0.0) 0.0 else a % b)
-                }
-                "&" -> {
-                    val b = (stack.removeLastOrNull() ?: 0.0).toLong()
-                    val a = (stack.removeLastOrNull() ?: 0.0).toLong()
-                    stack.addLast((a and b).toDouble())
-                }
-                "|" -> {
-                    val b = (stack.removeLastOrNull() ?: 0.0).toLong()
-                    val a = (stack.removeLastOrNull() ?: 0.0).toLong()
-                    stack.addLast((a or b).toDouble())
-                }
-                "^" -> {
-                    val b = (stack.removeLastOrNull() ?: 0.0).toLong()
-                    val a = (stack.removeLastOrNull() ?: 0.0).toLong()
-                    stack.addLast((a xor b).toDouble())
-                }
-                else -> {
-                    val num = token.toDoubleOrNull()
-                    if (num != null) {
-                        stack.addLast(num)
-                    } else {
-                        // Es una variable OBD (A, B, C, AA, etc.)
-                        val v = variables[token.uppercase()] ?: 0.0
-                        stack.addLast(v)
-                    }
-                }
-            }
+        private fun operand(): Double = when (val token = take()) {
+            "-" -> -operand()
+            "+" -> operand()
+            "(" -> expression(1).also { require(take() == ")") { "Falta cerrar paréntesis" } }
+            else -> token.toDoubleOrNull() ?: variables[token] ?: error("Falta el byte $token")
         }
-        return stack.lastOrNull() ?: 0.0
     }
 }

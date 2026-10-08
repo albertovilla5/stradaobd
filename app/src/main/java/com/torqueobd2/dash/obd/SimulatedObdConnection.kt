@@ -54,6 +54,8 @@ class SimulatedObdConnection : ObdConnection {
     var dpfFlowM3h = 120f
 
     private var simulationTick = 0L
+    private var diagnosticHeaders = false
+    private var demoCleared = false
 
     override suspend fun connect(): Boolean {
         _status.value = ConnectionStatus.CONNECTING
@@ -83,77 +85,129 @@ class SimulatedObdConnection : ObdConnection {
         manualThrottle = percent?.coerceIn(0f, 100f)
     }
 
+    private var lastPhysicsUpdateTime = System.currentTimeMillis()
+
     /**
-     * Avanza un paso en la simulación de física automotriz
+     * Avanza un paso en la simulación de física automotriz en tiempo real
      */
     fun updatePhysics() {
+        val now = System.currentTimeMillis()
+        val dtMillis = (now - lastPhysicsUpdateTime).coerceIn(0L, 500L)
+        if (dtMillis < 35L) {
+            // Evita avanzar la física múltiples veces durante una misma ráfaga de PIDs por ciclo de polling
+            return
+        }
+        lastPhysicsUpdateTime = now
+        val dt = (dtMillis / 1000f).coerceIn(0.01f, 0.1f) // segundos reales transcurridos
+
         simulationTick++
-        val t = simulationTick * 0.1
+        val t = now / 1000.0 // tiempo real en segundos
 
         val targetThrottle = manualThrottle ?: run {
-            // Ciclo de conducción automático: ralentí -> aceleración 1ª a 5ª marcha -> crucero -> frenado
-            val cycle = (sin(t * 0.4) * 50.0 + 50.0).toFloat()
-            cycle
+            // Ciclo de conducción suave de 24 segundos:
+            // 0s-3s: Parado al ralentí (0 km/h, 820 RPM)
+            // 3s-14s: Aceleración progresiva por marchas
+            // 14s-19s: Crucero a velocidad constante
+            // 19s-24s: Desaceleración suave
+            val cycleTime = (t % 24.0)
+            when {
+                cycleTime < 3.0 -> 0f
+                cycleTime < 14.0 -> {
+                    val p = ((cycleTime - 3.0) / 11.0).toFloat()
+                    (p * 55f + 15f).coerceIn(15f, 70f)
+                }
+                cycleTime < 19.0 -> 25f
+                else -> 0f
+            }
         }
 
-        throttlePedal = throttlePedal + (targetThrottle - throttlePedal) * 0.2f
+        // Suavizado del pedal
+        throttlePedal += (targetThrottle - throttlePedal) * (3f * dt)
         engineLoad = 15f + throttlePedal * 0.75f
 
-        // Simulación de cambio de marchas según aceleración y velocidad
-        if (throttlePedal > 20f) {
-            currentRpm += (throttlePedal * 50f - (currentRpm - 1000f) * 0.1f) * 0.05f
-            if (currentRpm > 4200f && currentGear < 6) {
+        // Dinámica de marchas y RPM realista
+        val gearRatios = floatArrayOf(0f, 7.8f, 14.2f, 22.0f, 31.5f, 41.0f, 52.0f)
+        if (throttlePedal > 10f) {
+            // Acelerando
+            val rpmGain = (throttlePedal * 25f) * dt
+            currentRpm += rpmGain
+            if (currentRpm > 3800f && currentGear < 6) {
                 currentGear++
-                currentRpm = 2400f
-            } else if (currentRpm > 4800f) {
-                currentRpm = 4800f
+                currentRpm = (currentRpm * 0.68f).coerceAtLeast(1800f)
+            } else if (currentRpm > 4500f) {
+                currentRpm = 4500f
             }
         } else {
-            // Desaceleración
-            currentRpm -= 80f
-            if (currentRpm < 1500f && currentGear > 1) {
+            // Desacelerando
+            currentRpm -= 600f * dt
+            if (currentRpm < 1400f && currentGear > 1) {
                 currentGear--
-                currentRpm = 2200f
+                currentRpm = (currentRpm * 1.35f).coerceAtMost(2600f)
             }
-            if (currentRpm < 820f) currentRpm = 820f + Random.nextFloat() * 20f
+            if (currentRpm < 820f) {
+                currentRpm = 820f
+                if (currentGear == 1) currentSpeed = 0f
+            }
         }
 
-        // Velocidad en función de RPM y marcha
-        val gearRatios = floatArrayOf(0f, 7.8f, 14.2f, 22.0f, 31.5f, 41.0f, 52.0f)
         val ratio = gearRatios.getOrElse(currentGear) { 20f }
-        val targetSpeed = (currentRpm / 1000f) * ratio
-        currentSpeed += (targetSpeed - currentSpeed) * 0.1f
-        if (currentSpeed < 0f) currentSpeed = 0f
+        val targetSpeed = if (currentRpm <= 850f && currentGear <= 1 && throttlePedal < 5f) {
+            0f
+        } else {
+            (currentRpm / 1000f) * ratio
+        }
+        currentSpeed += (targetSpeed - currentSpeed) * (2f * dt)
+        if (currentSpeed < 0.2f) currentSpeed = 0f
 
         // Presión de turbo (boost relativo) en bar: 0 a 1.6 bar
         val targetBoost = if (throttlePedal > 15f) (throttlePedal / 100f) * 1.55f else 0.05f
-        boostBar += (targetBoost - boostBar) * 0.25f
+        boostBar += (targetBoost - boostBar) * (3f * dt)
 
         // Temperatura de escape (EGT): 220°C a 680°C según carga y turbo
         val targetEgt = 220f + engineLoad * 4.2f + boostBar * 60f
-        egtTemp += (targetEgt - egtTemp) * 0.08f
+        egtTemp += (targetEgt - egtTemp) * (1.5f * dt)
 
         // Presión diferencial DPF: depende del caudal de escape y saturación de hollín
         val targetFlow = 60f + (currentRpm / 1000f) * 55f + boostBar * 80f
-        dpfFlowM3h += (targetFlow - dpfFlowM3h) * 0.15f
+        dpfFlowM3h += (targetFlow - dpfFlowM3h) * (2f * dt)
 
         val sootFactor = (calcPmGrams / 30f).coerceIn(0.5f, 2.5f)
         val targetDiffPres = (dpfFlowM3h / 150f) * 2.8f * sootFactor + (boostBar * 1.5f)
-        dpfDiffPresKpa += (targetDiffPres - dpfDiffPresKpa) * 0.12f
+        dpfDiffPresKpa += (targetDiffPres - dpfDiffPresKpa) * (2f * dt)
 
         // Simulación de avance de distancia y PM
-        dpfDistKm += (currentSpeed / 3600f) * 0.1f
-        dpfTimeSec += 0.1f
-        calcPmGrams += 0.001f
+        dpfDistKm += (currentSpeed / 3600f) * dt
+        dpfTimeSec += dt
+        calcPmGrams += 0.0001f * dt
 
-        // Nivel de aceite estable con pequeña fluctuación térmica
-        oilLevelMm = 98.2f + sin(t * 0.05).toFloat() * 0.8f
+        // Nivel de aceite estable
+        oilLevelMm = 98.2f + sin(t * 0.05).toFloat() * 0.3f
     }
 
     override suspend fun sendCommand(command: String): String {
         updatePhysics()
         val cmd = command.trim().uppercase()
 
+        val compact = cmd.replace(" ", "")
+        if (compact == "ATH1") diagnosticHeaders = true
+        if (compact == "ATH0" || compact == "ATD") diagnosticHeaders = false
+        if (compact == "ATDPN") return "7\r>"
+        fun diagnostic(payload: String): String {
+            val bytes = payload.split(" ")
+            return if (diagnosticHeaders) "18DAF110 %02X %s\r>".format(bytes.size, payload) else "$payload\r>"
+        }
+        when (compact) {
+            "0101" -> return diagnostic(if (demoCleared) "41 01 00 78 69 69" else "41 01 82 08 69 00")
+            "03" -> return diagnostic(if (demoCleared) "43 00" else "43 02 03 00 01 33")
+            "07" -> return diagnostic(if (demoCleared) "47 00" else "47 01 01 71")
+            "0A" -> return diagnostic("4A 01 04 20")
+            "04" -> { demoCleared = true; return diagnostic("44") }
+            "020200" -> return diagnostic(if (demoCleared) "42 02 00 00 00" else "42 02 00 03 00")
+            "020000" -> return diagnostic("42 00 00 08 18 00 00") // Refrigerante, RPM y velocidad.
+            "020500" -> return diagnostic("42 05 00 7E")
+            "020C00" -> return diagnostic("42 0C 00 0C 80")
+            "020D00" -> return diagnostic("42 0D 00 00")
+        }
         // Comandos de inicialización AT
         if (cmd.startsWith("AT")) {
             return when {

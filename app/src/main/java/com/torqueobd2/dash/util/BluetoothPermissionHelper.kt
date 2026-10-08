@@ -2,14 +2,15 @@ package com.torqueobd2.dash.util
 
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
 
 /**
- * Utilidad para comprobar y gestionar los permisos de Bluetooth y localización
- * en todas las versiones de Android desde API 29 (Android 10) hasta API 35 (Android 15).
+ * Permisos para listar y conectar dispositivos ya emparejados, desde Android 6.
+ * La ubicación no es necesaria porque el emparejamiento se hace en Ajustes.
  */
 object BluetoothPermissionHelper {
 
@@ -18,17 +19,12 @@ object BluetoothPermissionHelper {
      */
     fun getRequiredPermissions(): List<String> {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // Android 12 (API 31) en adelante requiere permisos cercanos específicos
-            listOf(
-                Manifest.permission.BLUETOOTH_CONNECT,
-                Manifest.permission.BLUETOOTH_SCAN
-            )
+            listOf(Manifest.permission.BLUETOOTH_CONNECT)
         } else {
-            // Android 10 y 11 (API 29-30) requieren permisos clásicos y localización para escaneo Bluetooth
+            // Permisos normales, concedidos al instalar. No se inicia un escaneo.
             listOf(
                 Manifest.permission.BLUETOOTH,
-                Manifest.permission.BLUETOOTH_ADMIN,
-                Manifest.permission.ACCESS_FINE_LOCATION
+                Manifest.permission.BLUETOOTH_ADMIN
             )
         }
     }
@@ -43,6 +39,35 @@ object BluetoothPermissionHelper {
             }
         }
         return true
+    }
+
+    fun getScanPermissions(): List<String> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        listOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN)
+    } else {
+        getRequiredPermissions() + listOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION)
+    }
+
+    fun hasScanPermissions(context: Context): Boolean = getScanPermissions().all {
+        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+    }
+
+    /**
+     * En Android anterior a 13 intenta encender Bluetooth directamente.
+     * Si devuelve false, la UI debe solicitar la activación con ACTION_REQUEST_ENABLE.
+     */
+    @Suppress("DEPRECATION")
+    fun enableBluetoothIfAllowed(context: Context): Boolean {
+        if (!hasAllPermissions(context)) return false
+        return try {
+            val adapter = context.getSystemService(BluetoothManager::class.java)?.adapter
+                ?: return false
+            when (adapter.state) {
+                BluetoothAdapter.STATE_ON, BluetoothAdapter.STATE_TURNING_ON -> true
+                else -> Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU && adapter.enable()
+            }
+        } catch (_: SecurityException) {
+            false
+        }
     }
 
     /**

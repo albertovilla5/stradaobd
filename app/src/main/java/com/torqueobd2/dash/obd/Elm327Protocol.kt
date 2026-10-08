@@ -66,52 +66,46 @@ object Elm327Protocol {
      * Para multilíneas CAN (ISO 15765-4) se limpian prefijos como "0:", "1:", etc.
      */
     fun extractDataBytes(command: String, rawResponse: String): IntArray {
-        val clean = cleanResponse(rawResponse)
-
-        if (clean.contains("NO DATA", ignoreCase = true) ||
-            clean.contains("ERROR", ignoreCase = true) ||
-            clean.contains("UNABLE", ignoreCase = true) ||
-            clean.contains("BUS INIT", ignoreCase = true)
-        ) {
-            return IntArray(0)
+        if (diagnoseResponseError(rawResponse) != null ||
+            rawResponse.contains("NO DATA", ignoreCase = true)) return IntArray(0)
+        val cmd = command.replace(" ", "").uppercase()
+        val prefix = when {
+            cmd.startsWith("01") -> "41" + cmd.substring(2)
+            cmd.startsWith("02") -> "42" + cmd.substring(2)
+            cmd.startsWith("22") -> "62" + cmd.substring(2)
+            else -> return IntArray(0)
         }
-
-        // Eliminar prefijos de multilínea CAN tipo "0: 62 25 12 ... 1: ... 2: ..."
-        val sanitized = clean.replace(Regex("""\b[0-9A-Fa-f]:"""), " ")
-            .replace(" ", "")
-
-        val cmdClean = command.replace(" ", "").uppercase()
-
-        // Determinar prefijo esperado de respuesta positiva (ej: 010C -> 410C, 222512 -> 622512)
-        val expectedPrefix = when {
-            cmdClean.startsWith("01") -> "41" + cmdClean.substring(2)
-            cmdClean.startsWith("02") -> "42" + cmdClean.substring(2)
-            cmdClean.startsWith("22") -> "62" + cmdClean.substring(2)
-            else -> ""
-        }
-
-        var dataHex = sanitized
-        if (expectedPrefix.isNotEmpty()) {
-            val idx = sanitized.indexOf(expectedPrefix)
-            if (idx >= 0) {
-                dataHex = sanitized.substring(idx + expectedPrefix.length)
-            }
-        }
-
-        // Convertir cada par de caracteres hexadecimales en un entero 0..255
-        val bytesList = mutableListOf<Int>()
-        var i = 0
-        while (i + 1 < dataHex.length) {
-            val byteStr = dataHex.substring(i, i + 2)
-            val byteVal = byteStr.toIntOrNull(16)
-            if (byteVal != null) {
-                bytesList.add(byteVal)
+        val lines = rawResponse.replace(">", "").replace("SEARCHING...", "", ignoreCase = true)
+            .replace("SEARCHING", "", ignoreCase = true).split(Regex("[\\r\\n]+"))
+            .map { it.trim().uppercase() }.filter { it.isNotEmpty() && it.replace(" ", "") != cmd }
+        // ATH0/CAF1: respuestas sin cabecera CAN; una respuesta por ECU.
+        // Rechazar cabeceras no reconocidas evita mezclar ECU o interpretar la cabecera como datos.
+        val frames = mutableListOf<String>()
+        var indexed: StringBuilder? = null
+        var nextIndex = 0
+        for (line in lines) {
+            val part = Regex("^([0-9A-F]+):\\s*(.*)$").matchEntire(line)
+            if (part != null) {
+                val index = part.groupValues[1].toIntOrNull(16) ?: return IntArray(0)
+                if (index == 0) {
+                    indexed?.let { frames.add(it.toString()) }
+                    indexed = StringBuilder()
+                    nextIndex = 0
+                }
+                if (indexed == null || index != nextIndex++) return IntArray(0)
+                indexed.append(part.groupValues[2].replace(Regex("\\s"), ""))
             } else {
-                break
+                indexed?.let { frames.add(it.toString()); indexed = null }
+                val compact = line.replace(Regex("\\s"), "")
+                // ELM añade a veces la longitud total antes de una respuesta multilínea.
+                if (compact.matches(Regex("[0-9A-F]{3}"))) continue
+                frames.add(compact)
             }
-            i += 2
         }
-
-        return bytesList.toIntArray()
+        indexed?.let { frames.add(it.toString()) }
+        val frame = frames.firstOrNull { it.startsWith(prefix) } ?: return IntArray(0)
+        val data = frame.substring(prefix.length)
+        if (data.isEmpty() || data.length % 2 != 0 || !data.matches(Regex("[0-9A-F]+"))) return IntArray(0)
+        return data.chunked(2).map { it.toInt(16) }.toIntArray()
     }
 }

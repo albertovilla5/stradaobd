@@ -4,20 +4,38 @@ import android.annotation.SuppressLint
 import android.app.Application
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothDevice
+import android.content.BroadcastReceiver
+import android.content.Intent
+import android.content.IntentFilter
+import androidx.core.content.ContextCompat
+import androidx.core.content.IntentCompat
 import android.content.Context
 import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.torqueobd2.dash.data.model.CustomDashboardTabs
 import com.torqueobd2.dash.data.model.CustomDashboardConfig
+import com.torqueobd2.dash.data.model.DashboardGridLayout
+import com.torqueobd2.dash.data.model.DashboardPreset
 import com.torqueobd2.dash.data.model.DashboardWidget
 import com.torqueobd2.dash.data.model.DeviceItem
 import com.torqueobd2.dash.data.model.ObdPid
+import com.torqueobd2.dash.data.model.PollingMode
 import com.torqueobd2.dash.data.model.VehicleProfile
 import com.torqueobd2.dash.data.model.WidgetSize
+import com.torqueobd2.dash.data.model.bindPids
+import com.torqueobd2.dash.data.model.bindPid
+import com.torqueobd2.dash.data.model.resolvePid
+import com.torqueobd2.dash.data.model.DashboardPresets
+import com.torqueobd2.dash.data.repository.SensorAlertRepository
+import com.torqueobd2.dash.data.model.SensorAlertRule
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import com.torqueobd2.dash.data.parser.TorqueCsvParser
+import com.torqueobd2.dash.data.model.ConnectionType
 import com.torqueobd2.dash.data.repository.DefaultPids
 import com.torqueobd2.dash.data.repository.VehicleProfileRepository
-import com.torqueobd2.dash.obd.ObdManager
 import com.torqueobd2.dash.util.BluetoothPermissionHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,16 +46,54 @@ import java.io.InputStream
 class ObdDashboardViewModel(application: Application) : AndroidViewModel(application) {
 
     private val profileRepository = VehicleProfileRepository(application.applicationContext)
-    private val obdManager = ObdManager(viewModelScope, profileRepository.getVehicleProfile())
+    private val alertRepository = SensorAlertRepository(application.getSharedPreferences("sensor_alerts", Context.MODE_PRIVATE))
+    private var savedAlertRules = alertRepository.load()
+    private val runtime = (application as com.torqueobd2.dash.TorqueApplication).obdRuntime
+    private val _simulationEnabled = runtime.simulationEnabled
+    val simulationEnabled = _simulationEnabled.asStateFlow()
+    private val _pollingMode = runtime.pollingMode
+    val pollingMode = _pollingMode.asStateFlow()
+    private val _isScanningBluetooth = runtime.scanningBluetooth
+    val isScanningBluetooth = _isScanningBluetooth.asStateFlow()
+    private val discoveredDevices = linkedMapOf<String, DeviceItem>()
+    private val obdManager = runtime.manager
+    val recordingState = runtime.recording
+    val recordingBusy = runtime.busy
+    val backgroundEnabled = runtime.backgroundEnabled
+    val backgroundServiceRunning = runtime.serviceRunning
+    val recordingError = runtime.error
+    fun setBackgroundEnabled(enabled: Boolean) = runtime.setBackgroundEnabled(enabled)
+    fun startRecording() = runtime.startRecording()
+    fun stopRecording() = runtime.stopRecording()
+    fun deleteRecording(id: String) = runtime.deleteRecording(id)
+    suspend fun exportRecording(id: String, output: java.io.OutputStream) = runtime.exportRecording(id, output)
+    fun setUiVisible(owner: Any, visible: Boolean) {
+        if (visible) refreshPairedBtDevices()
+        runtime.setUiVisible(owner, visible)
+    }
 
     val vehicleState = obdManager.vehicleState
     val connectionState = obdManager.connectionState
     val activePids = obdManager.activePids
     val vehicleProfile = obdManager.vehicleProfile
+    val sensorAlerts = obdManager.sensorAlerts
     val diagnosticLogs = obdManager.diagnosticLogs
+    val dtcState = obdManager.dtcState
+    private val _dtcCatalog = MutableStateFlow(com.torqueobd2.dash.data.repository.DtcCatalog(emptyMap()))
+    val dtcCatalog = _dtcCatalog.asStateFlow()
+    fun readTroubleCodes() = obdManager.readTroubleCodes()
+    fun clearTroubleCodes(session: Long) = obdManager.clearTroubleCodes(session, true)
+    fun cancelDiagnostics() = obdManager.cancelDiagnostics()
 
-    private val _customDashboard = MutableStateFlow(profileRepository.getCustomDashboard())
-    val customDashboard: StateFlow<CustomDashboardConfig> = _customDashboard.asStateFlow()
+    private val _customDashboards = MutableStateFlow(profileRepository.getCustomDashboardTabs())
+    val customDashboards: StateFlow<CustomDashboardTabs> = _customDashboards.asStateFlow()
+    private val interfacePreferences = com.torqueobd2.dash.data.repository.InterfacePreferences(application)
+    private val currentDashboard: CustomDashboardConfig get() = _customDashboards.value.selectedDashboard.let {
+        if (interfacePreferences.carMode) it.forCar() else it
+    }
+
+    private val _savedVehicles = MutableStateFlow<List<VehicleProfile>>(profileRepository.getAllVehicles())
+    val savedVehicles: StateFlow<List<VehicleProfile>> = _savedVehicles.asStateFlow()
 
     private val _pairedBtDevices = MutableStateFlow<List<DeviceItem>>(emptyList())
     val pairedBtDevices: StateFlow<List<DeviceItem>> = _pairedBtDevices.asStateFlow()
@@ -59,7 +115,54 @@ class ObdDashboardViewModel(application: Application) : AndroidViewModel(applica
     private val _isScanningSensors = MutableStateFlow(false)
     val isScanningSensors: StateFlow<Boolean> = _isScanningSensors.asStateFlow()
 
+    private val bluetoothReceiver = object : BroadcastReceiver() {
+        @SuppressLint("MissingPermission")
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action) {
+                BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> _isScanningBluetooth.value = false
+                BluetoothAdapter.ACTION_STATE_CHANGED -> {
+                    if (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1) == BluetoothAdapter.STATE_OFF) {
+                        _isScanningBluetooth.value = false
+                        discoveredDevices.clear()
+                    }
+                    refreshPairedBtDevices()
+                }
+                BluetoothDevice.ACTION_FOUND -> {
+                    if (!BluetoothPermissionHelper.hasAllPermissions(context)) return
+                    val device = IntentCompat.getParcelableExtra(intent, BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java) ?: return
+                    try {
+                        discoveredDevices[device.address] = DeviceItem(
+                            device.name ?: "Dispositivo Bluetooth", device.address, device.bondState == BluetoothDevice.BOND_BONDED
+                        )
+                        refreshPairedBtDevices(log = false)
+                    } catch (_: SecurityException) { }
+                }
+                BluetoothDevice.ACTION_BOND_STATE_CHANGED -> refreshPairedBtDevices()
+            }
+        }
+    }
+
     init {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            _dtcCatalog.value = com.torqueobd2.dash.data.repository.DtcCatalog.read(application.assets.open("dtc/generic.tsv").reader())
+        }
+        saveDashboardTabs(_customDashboards.value.bindPids(obdManager.activePids.value))
+        // Se escriben solo cambios de definición/selección, no cada lectura o escaneo.
+        viewModelScope.launch {
+            obdManager.activePids.map { pids -> pids.map { it.copy(isSupported = true, supportChecked = false) } }
+                .distinctUntilChanged().collect { pids ->
+                    val bound = _customDashboards.value.bindPids(pids)
+                    if (bound != _customDashboards.value) saveDashboardTabs(bound)
+                }
+        }
+        obdManager.logDiagnostic(com.torqueobd2.dash.util.DeviceDiagnostics.describe(application))
+        val filter = IntentFilter().apply {
+            addAction(BluetoothDevice.ACTION_FOUND)
+            addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+            addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+            addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
+        }
+        ContextCompat.registerReceiver(application, bluetoothReceiver, filter, ContextCompat.RECEIVER_EXPORTED)
         refreshPairedBtDevices()
     }
 
@@ -79,30 +182,130 @@ class ObdDashboardViewModel(application: Application) : AndroidViewModel(applica
         obdManager.setManualThrottle(percent)
     }
 
-    fun switchToSimulation() {
-        obdManager.startSimulation()
+    fun setVisibleSensors(pidIds: Set<String>) { obdManager.setVisibleSensors(pidIds) }
+
+    fun setPollingMode(mode: PollingMode) = runtime.setPollingMode(mode)
+
+    fun setSimulationEnabled(enabled: Boolean) {
+        stopBluetoothDiscovery()
+        runtime.setSimulationEnabled(enabled)
     }
 
     fun connectBluetooth(device: DeviceItem) {
-        obdManager.connectBluetooth(device)
+        stopBluetoothDiscovery()
+        runtime.connectBluetooth(device)
     }
 
     fun connectWifi(host: String, port: Int) {
-        obdManager.connectWifi(host, port)
+        if (host.isBlank() || port !in 1..65535) return
+        stopBluetoothDiscovery()
+        runtime.connectWifi(host, port)
     }
 
     fun disconnect() {
-        obdManager.disconnect()
+        stopBluetoothDiscovery()
+        runtime.stopEverything()
+    }
+
+    @SuppressLint("MissingPermission")
+    fun scanBluetoothDevices() {
+        refreshPairedBtDevices()
+        if (!BluetoothPermissionHelper.hasScanPermissions(getApplication())) {
+            _bluetoothErrorHint.value = "Concede los permisos de búsqueda de Bluetooth para ver dispositivos cercanos."
+            return
+        }
+        try {
+            val adapter = BluetoothAdapter.getDefaultAdapter()
+            if (adapter?.isEnabled != true) return
+            stopBluetoothDiscovery()
+            discoveredDevices.clear()
+            refreshPairedBtDevices(log = false)
+            _isScanningBluetooth.value = true
+            if (!adapter.startDiscovery()) {
+                _isScanningBluetooth.value = false
+                _bluetoothErrorHint.value = "Android no pudo iniciar la búsqueda. Comprueba Bluetooth y, en Android 6–11, la ubicación del sistema."
+            }
+        } catch (e: Exception) {
+            _isScanningBluetooth.value = false
+            _bluetoothErrorHint.value = "No se pudo buscar dispositivos: ${e.message}"
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun stopBluetoothDiscovery() {
+        try {
+            if (BluetoothPermissionHelper.hasScanPermissions(getApplication())) BluetoothAdapter.getDefaultAdapter()?.cancelDiscovery()
+        } catch (_: Exception) { }
+        _isScanningBluetooth.value = false
+    }
+
+    override fun onCleared() {
+        stopBluetoothDiscovery()
+        getApplication<Application>().unregisterReceiver(bluetoothReceiver)
+        super.onCleared()
     }
 
     fun togglePid(pidId: String, isEnabled: Boolean) {
         obdManager.togglePid(pidId, isEnabled)
     }
 
+    fun saveSensorAlert(rule: SensorAlertRule) {
+        require(rule.vehicleId == vehicleProfile.value.id && rule.validationError() == null)
+        savedAlertRules = if (savedAlertRules.any { it.id == rule.id }) {
+            savedAlertRules.map { if (it.id == rule.id) rule else it }
+        } else savedAlertRules + rule
+        persistSensorAlerts()
+    }
+
+    fun setSensorAlertEnabled(id: String, enabled: Boolean) {
+        savedAlertRules = savedAlertRules.map {
+            if (it.id == id && it.vehicleId == vehicleProfile.value.id) it.copy(enabled = enabled) else it
+        }
+        persistSensorAlerts()
+    }
+
+    fun deleteSensorAlert(id: String) {
+        savedAlertRules = savedAlertRules.filterNot { it.id == id && it.vehicleId == vehicleProfile.value.id }
+        persistSensorAlerts()
+    }
+
+    private fun persistSensorAlerts() {
+        alertRepository.save(savedAlertRules)
+        obdManager.setSensorAlertRules(savedAlertRules)
+    }
+
+    fun createOrUpdateVehicle(profile: VehicleProfile) {
+        profileRepository.saveVehicle(profile)
+        val updatedList = profileRepository.getAllVehicles()
+        _savedVehicles.value = updatedList
+        val active = profileRepository.getActiveVehicle()
+        runtime.updateProfile(active)
+        _csvImportNotification.value = "Vehículo '${profile.name}' guardado correctamente."
+    }
+
+    fun setActiveVehicle(vehicleId: String) {
+        val active = profileRepository.setActiveVehicle(vehicleId)
+        _savedVehicles.value = profileRepository.getAllVehicles()
+        runtime.updateProfile(active)
+        _csvImportNotification.value = "Vehículo activo cambiado a '${active.name}'."
+    }
+
+    fun deleteVehicle(vehicleId: String) {
+        val ok = profileRepository.deleteVehicle(vehicleId)
+        if (ok) {
+            savedAlertRules = savedAlertRules.filterNot { it.vehicleId == vehicleId }
+            persistSensorAlerts()
+            _savedVehicles.value = profileRepository.getAllVehicles()
+            val active = profileRepository.getActiveVehicle()
+            runtime.updateProfile(active)
+            _csvImportNotification.value = "Vehículo eliminado."
+        } else {
+            _csvImportNotification.value = "No se puede eliminar el único vehículo del garaje."
+        }
+    }
+
     fun updateVehicleProfile(newProfile: VehicleProfile) {
-        profileRepository.saveVehicleProfile(newProfile)
-        obdManager.updateProfile(newProfile)
-        _csvImportNotification.value = "Perfil de vehículo guardado correctamente."
+        createOrUpdateVehicle(newProfile)
     }
 
     fun scanSupportedSensors() {
@@ -111,6 +314,11 @@ class ObdDashboardViewModel(application: Application) : AndroidViewModel(applica
             obdManager.logDiagnostic("🔍 Escaneando sensores soportados por la centralita del coche...")
             _terminalLogs.value = _terminalLogs.value + "> Escaneando sensores soportados (PIDs 0100/0120/Modo 22)..."
             val results = obdManager.scanSupportedPids()
+            if (results.isEmpty()) {
+                _isScanningSensors.value = false
+                _csvImportNotification.value = "El escaneo no pudo completarse. Consulta el registro en Conexión."
+                return@launch
+            }
             val supportedCount = results.count { it.value }
             val unsupportedCount = results.size - supportedCount
             _isScanningSensors.value = false
@@ -119,43 +327,105 @@ class ObdDashboardViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    // GESTIÓN DEL DASHBOARD PERSONALIZADO
+    // GESTIÓN DE PESTAÑAS Y RANURAS
+    private fun saveDashboardTabs(tabs: CustomDashboardTabs) {
+        _customDashboards.value = tabs
+        profileRepository.saveCustomDashboardTabs(tabs)
+    }
+
+    private fun updateDashboard(config: CustomDashboardConfig) {
+        val stored = if (interfacePreferences.carMode) config.copy(
+            gridLayout = _customDashboards.value.selectedDashboard.gridLayout, carGridLayout = config.gridLayout.forCar()) else config
+        saveDashboardTabs(_customDashboards.value.updateSelected(stored))
+    }
+
+    fun selectDashboardTab(id: String) = saveDashboardTabs(_customDashboards.value.select(id))
+    fun createDashboardTab(name: String, layout: DashboardGridLayout) {
+        val tabs = _customDashboards.value.add(name, layout)
+        saveDashboardTabs(if (interfacePreferences.carMode) tabs.updateSelected(tabs.selectedDashboard.copy(carGridLayout = layout.forCar())) else tabs)
+    }
+    fun renameDashboardTab(id: String, name: String) = saveDashboardTabs(_customDashboards.value.rename(id, name))
+    fun moveDashboardTab(id: String, index: Int) = saveDashboardTabs(_customDashboards.value.move(id, index))
+
+    fun duplicateDashboardTab(id: String) = saveDashboardTabs(_customDashboards.value.duplicate(id))
+    fun deleteDashboardTab(id: String) = saveDashboardTabs(_customDashboards.value.delete(id))
+    fun setDashboardDensity(density: com.torqueobd2.dash.data.model.DashboardDensity) = updateDashboard(currentDashboard.copy(density = density))
+    fun addDashboardSensors(ids: List<String>) {
+        val empty = currentDashboard.getSlotList().count { it == null }
+        val widgets = ids.distinct().mapNotNull { id -> obdManager.activePids.value.firstOrNull { it.id == id && (!it.supportChecked || it.isSupported) } }
+            .take(empty).map { pid -> DashboardWidget(type = com.torqueobd2.dash.data.model.WidgetType.COMPACT_TILE,
+                pidId = pid.id, pidShortName = pid.shortName, title = pid.shortName.ifBlank { pid.name }) }
+        enableWidgetSensors(widgets)
+        updateDashboard(currentDashboard.fillEmptySlots(widgets))
+    }
+    fun transferDashboardWidget(source: Int, destination: Int, duplicate: Boolean) = updateDashboard(currentDashboard.transferSlot(source, destination, duplicate))
+    fun importDashboardDesigns(configs: List<CustomDashboardConfig>) {
+        val bound = configs.map { it.copy(widgets = emptyList(), slots = it.resolvedSlots().mapValues { entry -> entry.value.bindPid(obdManager.activePids.value) }) }
+        saveDashboardTabs(_customDashboards.value.appendImported(bound))
+        enableWidgetSensors(bound.flatMap { it.resolvedSlots().values })
+    }
+
+    fun setCustomGridLayout(layout: DashboardGridLayout) {
+        updateDashboard(currentDashboard.copy(gridLayout = layout))
+    }
+
+    private fun enableWidgetSensors(widgets: List<DashboardWidget>) {
+        val ids = widgets.mapNotNull { it.resolvePid(obdManager.activePids.value)?.id }.toSet()
+        obdManager.activePids.value.filter { it.id in ids && !it.isEnabled }
+            .forEach { obdManager.togglePid(it.id, true) }
+    }
+
+    fun setWidgetInSlot(slotIndex: Int, widget: DashboardWidget?) {
+        if (slotIndex !in 0 until currentDashboard.gridLayout.slotCount) return
+        widget?.let { enableWidgetSensors(listOf(it)) }
+        updateDashboard(currentDashboard.withSlot(slotIndex, widget?.bindPid(obdManager.activePids.value)))
+    }
+
+    fun clearSlot(slotIndex: Int) = setWidgetInSlot(slotIndex, null)
+
     fun addCustomWidget(widget: DashboardWidget) {
-        val currentWidgets = _customDashboard.value.widgets.toMutableList()
-        currentWidgets.add(widget)
-        val updated = _customDashboard.value.copy(widgets = currentWidgets)
-        _customDashboard.value = updated
-        profileRepository.saveCustomDashboard(updated)
+        val targetSlot = (0 until currentDashboard.gridLayout.slotCount).firstOrNull {
+            currentDashboard.getWidgetForSlot(it) == null
+        } ?: return
+        setWidgetInSlot(targetSlot, widget)
     }
 
     fun removeCustomWidget(widgetId: String) {
-        val currentWidgets = _customDashboard.value.widgets.filter { it.id != widgetId }
-        val updated = _customDashboard.value.copy(widgets = currentWidgets)
-        _customDashboard.value = updated
-        profileRepository.saveCustomDashboard(updated)
+        updateDashboard(currentDashboard.copy(slots = currentDashboard.resolvedSlots().filterValues { it.id != widgetId }, widgets = emptyList()))
     }
 
     fun toggleWidgetSize(widgetId: String) {
-        val currentWidgets = _customDashboard.value.widgets.map {
-            if (it.id == widgetId) {
-                val newSize = if (it.size == WidgetSize.STANDARD) WidgetSize.FULL_WIDTH else WidgetSize.STANDARD
-                it.copy(size = newSize)
-            } else it
+        val slots = currentDashboard.resolvedSlots().mapValues { (_, widget) ->
+            if (widget.id == widgetId) widget.copy(size = if (widget.size == WidgetSize.STANDARD) WidgetSize.FULL_WIDTH else WidgetSize.STANDARD)
+            else widget
         }
-        val updated = _customDashboard.value.copy(widgets = currentWidgets)
-        _customDashboard.value = updated
-        profileRepository.saveCustomDashboard(updated)
+        updateDashboard(currentDashboard.copy(slots = slots, widgets = emptyList()))
     }
 
     fun resetCustomDashboardToDefault() {
-        val defaultCfg = CustomDashboardConfig()
-        _customDashboard.value = defaultCfg
-        profileRepository.saveCustomDashboard(defaultCfg)
-        _csvImportNotification.value = "Dashboard personalizado restablecido a valores por defecto."
+        val defaults = CustomDashboardConfig.getDefaultWidgets().filter { widget ->
+            widget.resolvePid(obdManager.activePids.value)?.let { !it.supportChecked || it.isSupported } == true
+        }
+        enableWidgetSensors(defaults)
+        updateDashboard(CustomDashboardConfig(widgets = defaults))
+    }
+
+    fun applyDashboardPreset(preset: DashboardPreset) {
+        val widgets = preset.widgets.mapNotNull { widget ->
+            widget.resolvePid(obdManager.activePids.value)?.takeIf { !it.supportChecked || it.isSupported }
+                ?.let { widget.copy(pidId = it.id) }
+        }
+        enableWidgetSensors(widgets)
+        updateDashboard(currentDashboard.copy(gridLayout = preset.gridLayout,
+            slots = widgets.mapIndexed { index, widget -> index to widget }.toMap(), widgets = emptyList()))
+    }
+
+    fun clearCustomDashboard() {
+        updateDashboard(currentDashboard.copy(slots = emptyMap(), widgets = emptyList()))
     }
 
     @SuppressLint("MissingPermission")
-    fun refreshPairedBtDevices() {
+    fun refreshPairedBtDevices(log: Boolean = true) {
         val app = getApplication<Application>()
 
         // 1. Validar permisos
@@ -166,32 +436,32 @@ class ObdDashboardViewModel(application: Application) : AndroidViewModel(applica
             return
         }
 
-        // 2. Obtener BluetoothAdapter de manera moderna y retrocompatible
-        val bluetoothManager = app.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
-        val adapter = bluetoothManager?.adapter ?: BluetoothAdapter.getDefaultAdapter()
-
-        if (adapter == null) {
-            _bluetoothErrorHint.value = "Este dispositivo no dispone de hardware Bluetooth."
-            _pairedBtDevices.value = emptyList()
-            obdManager.logDiagnostic("❌ No se detectó hardware Bluetooth en el dispositivo.")
-            return
-        }
-
-        if (!adapter.isEnabled) {
-            _bluetoothErrorHint.value = "El Bluetooth está desactivado. Actívalo en los Ajustes del teléfono para listar tu ELM327."
-            _pairedBtDevices.value = emptyList()
-            obdManager.logDiagnostic("⚠️ El adaptador Bluetooth está apagado en el sistema.")
-            return
-        }
-
         try {
+            // 2. Obtener BluetoothAdapter de manera moderna y retrocompatible
+            val bluetoothManager = app.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+            val adapter = bluetoothManager?.adapter ?: BluetoothAdapter.getDefaultAdapter()
+
+            if (adapter == null) {
+                _bluetoothErrorHint.value = "Android no ofrece un adaptador Bluetooth a esta app. Usa WiFi si la radio solo permite Bluetooth desde su app de fábrica."
+                _pairedBtDevices.value = emptyList()
+                obdManager.logDiagnostic("❌ No se detectó hardware Bluetooth en el dispositivo.")
+                return
+            }
+
+            if (!adapter.isEnabled) {
+                _bluetoothErrorHint.value = "El Bluetooth está desactivado. Actívalo en los Ajustes de la radio para listar tu ELM327."
+                _pairedBtDevices.value = emptyList()
+                obdManager.logDiagnostic("⚠️ El adaptador Bluetooth está apagado en el sistema.")
+                return
+            }
+
             val paired = adapter.bondedDevices?.map {
                 DeviceItem(name = it.name ?: "Dispositivo Bluetooth", address = it.address)
             } ?: emptyList()
 
             // Ordenar destacando los dispositivos con nombres típicos de OBD2
             val obdKeywords = listOf("OBD", "ELM", "VGATE", "VLINKER", "VIECA", "CARISTA", "KONNWEI", "SCAN")
-            val sortedList = paired.sortedByDescending { dev ->
+            val sortedList = (discoveredDevices.values + paired).associateBy { it.address }.values.sortedByDescending { dev ->
                 val upper = dev.name.uppercase()
                 obdKeywords.any { upper.contains(it) }
             }
@@ -199,15 +469,17 @@ class ObdDashboardViewModel(application: Application) : AndroidViewModel(applica
             _pairedBtDevices.value = sortedList
             _bluetoothErrorHint.value = null
 
-            if (sortedList.isEmpty()) {
+            if (log && sortedList.isEmpty()) {
                 obdManager.logDiagnostic("ℹ️ No hay ningún dispositivo Bluetooth emparejado en el sistema. Empareja primero el ELM327 en los Ajustes de Bluetooth de Android (PIN habitual: 1234 o 0000).")
-            } else {
+            } else if (log) {
                 obdManager.logDiagnostic("📋 Dispositivos Bluetooth emparejados detectados: ${sortedList.size}")
             }
         } catch (e: SecurityException) {
+            _pairedBtDevices.value = emptyList()
             _bluetoothErrorHint.value = "Error de seguridad: Permiso de conexión Bluetooth denegado (${e.message})."
             obdManager.logDiagnostic("❌ Error de permisos al leer bondedDevices: ${e.message}")
         } catch (e: Exception) {
+            _pairedBtDevices.value = emptyList()
             _bluetoothErrorHint.value = "Error al consultar dispositivos: ${e.message}"
             obdManager.logDiagnostic("❌ Excepción al buscar dispositivos: ${e.message}")
         }
@@ -245,7 +517,9 @@ class ObdDashboardViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun loadSampleHondaIdtecPids() {
-        importCsvFromString(DefaultPids.SAMPLE_HONDA_IDTEC_CSV)
+        obdManager.addPids(DefaultPids.getHondaIdtecPids())
+        val ids = DefaultPids.getHondaIdtecPids().map { it.id }.toSet()
+        obdManager.activePids.value.filter { it.id in ids }.forEach { obdManager.togglePid(it.id, true) }
     }
 
     fun loadStandardPids() {

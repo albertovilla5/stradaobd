@@ -14,14 +14,19 @@ data class ObdReading(
     val units: String,
     val minValue: Float,
     val maxValue: Float,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val decodedValue: Double = value.toDouble(),
+    val isSimulated: Boolean = false,
+    val receivedAtNanos: Long = System.nanoTime(),
+    val valueLabels: Map<Int, String> = emptyMap()
 ) {
     fun formatted(): String {
+        if (!value.isFinite() || !decodedValue.isFinite()) return "—"
+        if (decodedValue == decodedValue.toInt().toDouble()) valueLabels[decodedValue.toInt()]?.let { return it }
         return when {
-            kotlin.math.abs(value) >= 1000f -> String.format(Locale.US, "%.0f", value)
-            kotlin.math.abs(value) >= 100f -> String.format(Locale.US, "%.1f", value)
-            kotlin.math.abs(value) >= 10f -> String.format(Locale.US, "%.1f", value)
-            else -> String.format(Locale.US, "%.2f", value)
+            kotlin.math.abs(decodedValue) >= 1000 -> String.format(Locale.US, "%.0f", decodedValue)
+            kotlin.math.abs(decodedValue) >= 10 -> String.format(Locale.US, "%.1f", decodedValue)
+            else -> String.format(Locale.US, "%.2f", decodedValue)
         }
     }
 
@@ -31,6 +36,6 @@ data class ObdReading(
     val progress: Float
         get() {
             val range = maxValue - minValue
-            return if (range <= 0.0001f) 0f else ((value - minValue) / range).coerceIn(0f, 1f)
+            return if (!value.isFinite() || range <= 0.0001f) 0f else ((value - minValue) / range).coerceIn(0f, 1f)
         }
 }

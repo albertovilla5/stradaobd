@@ -1,254 +1,302 @@
 package com.torqueobd2.dash.ui
 
+import com.torqueobd2.dash.ui.automotive.*
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import android.bluetooth.BluetoothAdapter
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.content.res.Configuration
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import com.torqueobd2.dash.util.BluetoothPermissionHelper
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.DashboardCustomize
-import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.filled.FilterDrama
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
-import androidx.compose.material3.NavigationRailItemDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScrollableTabRow
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.torqueobd2.dash.data.model.ConnectionStatus
 import com.torqueobd2.dash.data.model.ConnectionType
-import com.torqueobd2.dash.ui.screens.ConnectionScreen
-import com.torqueobd2.dash.ui.screens.CustomDashboardScreen
-import com.torqueobd2.dash.ui.screens.DigitalHudScreen
-import com.torqueobd2.dash.ui.screens.DpfDiagnosticsScreen
-import com.torqueobd2.dash.ui.screens.GridMonitorScreen
-import com.torqueobd2.dash.ui.screens.PidManagerScreen
-import com.torqueobd2.dash.ui.screens.SportDashboardScreen
-import com.torqueobd2.dash.ui.screens.TerminalScreen
-import com.torqueobd2.dash.ui.screens.VehicleConfigScreen
-import com.torqueobd2.dash.ui.theme.CarbonBlack
-import com.torqueobd2.dash.ui.theme.DarkSurface
-import com.torqueobd2.dash.ui.theme.NeonCyan
-import com.torqueobd2.dash.ui.theme.NeonGreen
-import com.torqueobd2.dash.ui.theme.RacingOrange
-import com.torqueobd2.dash.ui.theme.TextMuted
-import com.torqueobd2.dash.ui.theme.TextWhite
-import com.torqueobd2.dash.ui.theme.WarningAmber
+import com.torqueobd2.dash.obd.ObdPollingPolicy
+import com.torqueobd2.dash.ui.components.FittedValue
+import com.torqueobd2.dash.ui.components.RacingMark
+import com.torqueobd2.dash.ui.components.StatusPill
+import com.torqueobd2.dash.ui.screens.*
+import com.torqueobd2.dash.ui.theme.*
 import com.torqueobd2.dash.viewmodel.ObdDashboardViewModel
+import java.util.Locale
 
-data class NavTab(
-    val title: String,
-    val icon: ImageVector
-)
+data class NavTab(val title: String, val label: String, val icon: ImageVector)
 
 @Composable
-fun MainScreen(
-    viewModel: ObdDashboardViewModel,
-    modifier: Modifier = Modifier
-) {
+fun MainScreen(viewModel: ObdDashboardViewModel, modifier: Modifier = Modifier) {
     val vehicleState by viewModel.vehicleState.collectAsState()
     val connectionState by viewModel.connectionState.collectAsState()
     val activePids by viewModel.activePids.collectAsState()
     val vehicleProfile by viewModel.vehicleProfile.collectAsState()
-    val customDashboard by viewModel.customDashboard.collectAsState()
+    val savedVehicles by viewModel.savedVehicles.collectAsState()
+    val customDashboards by viewModel.customDashboards.collectAsState()
+    val customDashboard = customDashboards.selectedDashboard.let { if (LocalCarMode.current) it.forCar() else it }
     val isScanningSensors by viewModel.isScanningSensors.collectAsState()
     val terminalLogs by viewModel.terminalLogs.collectAsState()
     val notificationMessage by viewModel.csvImportNotification.collectAsState()
     val pairedBtDevices by viewModel.pairedBtDevices.collectAsState()
     val diagnosticLogs by viewModel.diagnosticLogs.collectAsState()
     val bluetoothErrorHint by viewModel.bluetoothErrorHint.collectAsState()
+    val sensorAlerts by viewModel.sensorAlerts.collectAsState()
+    val dtcState by viewModel.dtcState.collectAsState()
 
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
 
-    val configuration = LocalConfiguration.current
-    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    if (savedVehicles.isEmpty()) {
+        Box(modifier.fillMaxSize().background(CockpitBackground).safeDrawingPadding().imePadding()) {
+            VehicleProfileWizard(initialProfile = null, initialSetup = true, onCancel = null,
+                onSave = viewModel::createOrUpdateVehicle)
+        }
+        return
+    }
 
+    val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
+    val context = LocalContext.current
+    var bluetoothStartupHandled by rememberSaveable { mutableStateOf(false) }
+    val bluetoothEnableLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        viewModel.refreshPairedBtDevices()
+    }
+    fun enableBluetoothOnStartup() {
+        if (!BluetoothPermissionHelper.hasAllPermissions(context) ||
+            !BluetoothPermissionHelper.isBluetoothSupported()) return
+        if (BluetoothPermissionHelper.enableBluetoothIfAllowed(context)) return
+        try {
+            bluetoothEnableLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(context, "Activa Bluetooth desde los ajustes del dispositivo.", Toast.LENGTH_LONG).show()
+        } catch (_: SecurityException) {
+            Toast.makeText(context, "Concede el permiso de Bluetooth para activarlo.", Toast.LENGTH_LONG).show()
+        }
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        enableBluetoothOnStartup()
+        viewModel.refreshPairedBtDevices()
+    }
+    LaunchedEffect(Unit) {
+        // No repetir la solicitud al recomponer, recrear la actividad o cerrar el diálogo.
+        if (bluetoothStartupHandled) return@LaunchedEffect
+        bluetoothStartupHandled = true
+        if (!BluetoothPermissionHelper.isBluetoothSupported()) return@LaunchedEffect
+        if (!BluetoothPermissionHelper.hasAllPermissions(context)) {
+            permissionLauncher.launch(BluetoothPermissionHelper.getRequiredPermissions().toTypedArray())
+        } else {
+            enableBluetoothOnStartup()
+        }
+    }
+    val haptic = LocalHapticFeedback.current
     val tabs = listOf(
-        NavTab("Deportivo", Icons.Default.Speed),
-        NavTab("A Medida", Icons.Default.DashboardCustomize),
-        NavTab("Digital HUD", Icons.Default.DirectionsCar),
-        NavTab("DPF / Diésel", Icons.Default.FilterDrama),
-        NavTab("Perfil Coche", Icons.Default.Settings),
-        NavTab("Monitores", Icons.Default.Dashboard),
-        NavTab("PIDs CSV", Icons.Default.CloudDownload),
-        NavTab("Conexión", Icons.Default.Build),
-        NavTab("Terminal", Icons.Default.Terminal)
+        NavTab("Deportivo", "Deportivo", Icons.Default.Speed),
+        NavTab("A Medida", "A medida", Icons.Default.DashboardCustomize),
+        NavTab("Vehículo", "Vehículo", Icons.Default.DirectionsCar),
+        NavTab("Sensores", "Sensores", Icons.Default.Dashboard),
+        NavTab("Ajustes", "Ajustes", Icons.Default.Settings),
+        NavTab("Averías", "Averías", Icons.Default.CarRepair)
     )
-
-    if (isLandscape) {
-        // MODO LANDSCAPE (PANTALLA DE COCHE / TABLET APAYSADA): NavigationRail lateral para maximizar altura
-        Row(modifier = Modifier.fillMaxSize().background(CarbonBlack)) {
-            NavigationRail(
-                containerColor = DarkSurface,
-                contentColor = RacingOrange,
-                modifier = Modifier.fillMaxHeight().width(68.dp)
-            ) {
+    var savedTabIndex by rememberSaveable { mutableIntStateOf(0) }
+    var dashboardFullScreen by rememberSaveable { mutableStateOf(false) }
+    BackHandler(enabled = dashboardFullScreen) { dashboardFullScreen = false }
+    var selectedSettingsTab by rememberSaveable { mutableIntStateOf(-1) }
+    var carMenuVisible by rememberSaveable { mutableStateOf(false) }
+    val car = LocalCarMode.current
+    val selectedTabIndex = savedTabIndex.coerceIn(tabs.indices)
+    var gridVisibleSensors by remember { mutableStateOf(emptySet<String>()) }
+    var vehicleVisibleSensors by remember { mutableStateOf(emptySet<String>()) }
+    val visibleSensors = when (if (car && carMenuVisible) -1 else selectedTabIndex) {
+        2 -> vehicleVisibleSensors
+        3 -> gridVisibleSensors
+        else -> ObdPollingPolicy.screenSensors(selectedTabIndex, customDashboard, activePids)
+    }
+    LaunchedEffect(visibleSensors) { viewModel.setVisibleSensors(visibleSensors) }
+    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val verticalNavigationScroll = rememberScrollState()
+    val horizontalNavigationScroll = rememberScrollState()
+    val density = LocalDensity.current.density
+    val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+    val navigationHeight = 38.dp + 14.dp * fontScale
+    val navigationWidth = 77.dp * fontScale
+    val activeScroll = if (landscape) verticalNavigationScroll else horizontalNavigationScroll
+    LaunchedEffect(selectedTabIndex, landscape, fontScale, activeScroll.viewportSize) {
+        val step = if (landscape) navigationHeight + 4.dp else navigationWidth + 5.dp
+        val itemSize = if (landscape) navigationHeight else navigationWidth
+        val start = (selectedTabIndex * step.value * density).toInt()
+        val end = start + (itemSize.value * density).toInt()
+        if (activeScroll.viewportSize > 0) {
+            val target = when {
+                start < activeScroll.value -> start
+                end > activeScroll.value + activeScroll.viewportSize -> end - activeScroll.viewportSize
+                else -> activeScroll.value
+            }
+            activeScroll.animateScrollTo(target.coerceAtLeast(0))
+        }
+    }
+    val warningLabel: String? = null // No inferir testigos del coche a partir de umbrales genéricos.
+    val selectTab: (Int) -> Unit = {
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        carMenuVisible = false
+        savedTabIndex = it
+    }
+    val screen: @Composable () -> Unit = {
+        ScreenContent(
+            tabIndex = selectedTabIndex, viewModel = viewModel, vehicleState = vehicleState,
+            connectionState = connectionState, activePids = activePids, vehicleProfile = vehicleProfile,
+            savedVehicles = savedVehicles, customDashboards = customDashboards,
+            isScanningSensors = isScanningSensors, terminalLogs = terminalLogs,
+            notificationMessage = notificationMessage, pairedBtDevices = pairedBtDevices,
+            diagnosticLogs = diagnosticLogs, bluetoothErrorHint = bluetoothErrorHint,
+            selectedSettingsTab = selectedSettingsTab,
+            onSettingsTabSelected = { selectedSettingsTab = it },
+            onGridSensorsChanged = { gridVisibleSensors = it },
+            onVehicleSensorsChanged = { vehicleVisibleSensors = it },
+            dashboardFullScreen = dashboardFullScreen, onDashboardFullScreenChanged = { dashboardFullScreen = it }
+        )
+    }
+    val carBack: () -> Unit = {
+        if (selectedTabIndex == 4 && selectedSettingsTab >= 0 && !carMenuVisible) selectedSettingsTab = -1
+        else if (!carMenuVisible && selectedTabIndex > 1) carMenuVisible = true
+        else { carMenuVisible = false; savedTabIndex = 0 }
+    }
+    BackHandler(enabled = car && !dashboardFullScreen && (carMenuVisible || selectedTabIndex > 1)) { carBack() }
+    val openSettings: (Int) -> Unit = { section -> selectedSettingsTab = section; selectTab(4) }
+    Column(modifier.fillMaxSize().background(if (car) com.torqueobd2.dash.ui.theme.CockpitBackground else CarbonBlack).safeDrawingPadding().imePadding()) {
+        SensorAlertBanner(sensorAlerts)
+        if (dashboardFullScreen && selectedTabIndex == 1) { Box(Modifier.weight(1f)) { screen() } }
+        else if (car) {
+            CarShell(title = if (carMenuVisible) "Menú" else when (selectedTabIndex) {
+                0 -> "Conducción"; 1 -> "Mis paneles"; 4 -> when (selectedSettingsTab) {
+                    0 -> "Preferencias"; 1 -> "Conexión"; 2 -> "Terminal"; 3 -> "Avisos"; 4 -> "Grabación"; else -> "Ajustes"
+                }; else -> tabs[selectedTabIndex].title
+            }, vehicle = vehicleProfile.name, connection = connectionState,
+                selected = selectedTabIndex, menuVisible = carMenuVisible,
+                diagnosticCount = dtcState.report?.codes?.size?.takeIf { it > 0 },
+                onDriving = { selectTab(0) }, onPanels = { selectTab(1) },
+                onMenu = { carMenuVisible = true }, onDiagnostics = { selectTab(5) }, onBack = { backDispatcher?.onBackPressed() ?: carBack() }, onConnection = { openSettings(1) }) {
+                if (carMenuVisible) CarMenu(listOf(
+                    CarMenuEntry("Vehículo", "Garaje y calibración", Icons.Default.DirectionsCar) { selectTab(2) },
+                    CarMenuEntry("Sensores", "Lecturas y catálogo", Icons.Default.Dashboard) { selectTab(3) },
+                    CarMenuEntry("Averías OBD", "Leer códigos de error y testigo MIL", Icons.Default.CarRepair) { selectTab(5) },
+                    CarMenuEntry("Conexión", "Adaptador Bluetooth / WiFi", Icons.Default.Bluetooth) { openSettings(1) },
+                    CarMenuEntry("Grabación", "Guardar y exportar viajes", Icons.Default.FiberManualRecord) { openSettings(4) },
+                    CarMenuEntry("Ajustes", "Pantalla, avisos y herramientas", Icons.Default.Settings) { openSettings(-1) }
+                )) else screen()
+            }
+        } else if (landscape) {
+            Row(Modifier.weight(1f).fillMaxWidth()) {
                 Column(
-                    modifier = Modifier.fillMaxHeight().verticalScroll(rememberScrollState()),
+                    Modifier.width(86.dp * fontScale.coerceAtMost(1.4f)).fillMaxHeight().background(DarkSurface).padding(horizontal = 7.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "OBD",
-                        color = RacingOrange,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Black,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    tabs.forEachIndexed { index, tab ->
-                        NavigationRailItem(
-                            selected = selectedTabIndex == index,
-                            onClick = { selectedTabIndex = index },
-                            icon = {
-                                Icon(
-                                    tab.icon,
-                                    contentDescription = tab.title,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            },
-                            colors = NavigationRailItemDefaults.colors(
-                                selectedIconColor = RacingOrange,
-                                unselectedIconColor = TextMuted,
-                                indicatorColor = Color(0x33FF6D00)
-                            )
-                        )
+                    RacingMark(Modifier.padding(vertical = 12.dp).size(30.dp, 21.dp))
+                    Column(Modifier.weight(1f).verticalScroll(verticalNavigationScroll), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        tabs.forEachIndexed { index, tab ->
+                            RaceNavigationItem(tab, index == selectedTabIndex, { selectTab(index) }, Modifier.fillMaxWidth().height(navigationHeight))
+                        }
+                        Spacer(Modifier.height(8.dp))
                     }
                 }
+                Box(Modifier.width(1.dp).fillMaxHeight().background(BorderDark.copy(alpha = 0.5f)))
+                Column(Modifier.weight(1f)) {
+                    CockpitHeader(tabs[selectedTabIndex].title, vehicleProfile.name, connectionState.type,
+                        connectionState.status, connectionState.commandsPerSecond, warningLabel)
+                    Box(Modifier.weight(1f)) { screen() }
+                }
             }
-
-            Column(modifier = Modifier.fillMaxSize()) {
-                TopStatusBar(
-                    connectionType = connectionState.type,
-                    connectionStatus = connectionState.status,
-                    commandsPerSecond = connectionState.commandsPerSecond,
-                    isDpfAlert = vehicleState.dpfWarningLight || vehicleState.dpfActiveRegen,
-                    estimatedHp = vehicleState.estimatedHorsepowerCv,
-                    rangeKm = vehicleState.estimatedRangeKm
-                )
-
-                Box(modifier = Modifier.fillMaxSize()) {
-                    ScreenContent(
-                        tabIndex = selectedTabIndex,
-                        viewModel = viewModel,
-                        vehicleState = vehicleState,
-                        connectionState = connectionState,
-                        activePids = activePids,
-                        vehicleProfile = vehicleProfile,
-                        customDashboard = customDashboard,
-                        isScanningSensors = isScanningSensors,
-                        terminalLogs = terminalLogs,
-                        notificationMessage = notificationMessage,
-                        pairedBtDevices = pairedBtDevices,
-                        diagnosticLogs = diagnosticLogs,
-                        bluetoothErrorHint = bluetoothErrorHint
-                    )
+        } else {
+            CockpitHeader(tabs[selectedTabIndex].title, vehicleProfile.name, connectionState.type,
+                connectionState.status, connectionState.commandsPerSecond, warningLabel)
+            Box(Modifier.weight(1f)) { screen() }
+            Row(Modifier.fillMaxWidth().background(DarkSurface).horizontalScroll(horizontalNavigationScroll)
+                .padding(horizontal = 8.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                tabs.forEachIndexed { index, tab ->
+                    RaceNavigationItem(tab, index == selectedTabIndex, { selectTab(index) }, Modifier.width(navigationWidth).height(navigationHeight))
                 }
             }
         }
-    } else {
-        // MODO VERTICAL (PORTRAIT): Scaffold estándar con barra inferior desplazable
-        Scaffold(
-            topBar = {
-                TopStatusBar(
-                    connectionType = connectionState.type,
-                    connectionStatus = connectionState.status,
-                    commandsPerSecond = connectionState.commandsPerSecond,
-                    isDpfAlert = vehicleState.dpfWarningLight || vehicleState.dpfActiveRegen,
-                    estimatedHp = vehicleState.estimatedHorsepowerCv,
-                    rangeKm = vehicleState.estimatedRangeKm
-                )
-            },
-            bottomBar = {
-                ScrollableTabRow(
-                    selectedTabIndex = selectedTabIndex,
-                    containerColor = DarkSurface,
-                    contentColor = RacingOrange,
-                    edgePadding = 8.dp,
-                    divider = {}
-                ) {
-                    tabs.forEachIndexed { index, tab ->
-                        Tab(
-                            selected = selectedTabIndex == index,
-                            onClick = { selectedTabIndex = index },
-                            text = {
-                                Text(
-                                    text = tab.title,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (selectedTabIndex == index) RacingOrange else TextMuted
-                                )
-                            },
-                            icon = {
-                                Icon(
-                                    tab.icon,
-                                    contentDescription = tab.title,
-                                    tint = if (selectedTabIndex == index) RacingOrange else TextMuted,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        )
-                    }
+    }
+}
+
+@Composable
+private fun RaceNavigationItem(tab: NavTab, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        modifier.heightIn(min = 52.dp).clip(shape)
+            .background(if (selected) RacingOrange.copy(alpha = 0.13f) else Color.Transparent)
+            .border(1.dp, if (selected) RacingOrange.copy(alpha = 0.35f) else Color.Transparent, shape)
+            .selectable(selected = selected, role = Role.Tab, onClick = onClick).padding(vertical = 7.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(tab.icon, contentDescription = tab.title, tint = if (selected) RacingOrange else TextMuted, modifier = Modifier.size(19.dp))
+        Text(tab.label, color = if (selected) TextWhite else TextMuted, fontSize = 10.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1)
+    }
+}
+
+@Composable
+private fun CockpitHeader(title: String, vehicle: String, type: ConnectionType, status: ConnectionStatus, rate: Float, alert: String?) {
+    BoxWithConstraints(Modifier.fillMaxWidth().background(CarbonBlack)) {
+        val compact = maxWidth < 460.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
+        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FittedValue("TORQUE", 13.sp, Modifier.weight(1f, fill = false), color = TextWhite,
+                        fontWeight = FontWeight.Black, letterSpacing = 1.5.sp, fillWidth = false)
+                    Text("OBD2", color = RacingOrange, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    if (!compact) Text("/  $title", color = TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-            },
-            containerColor = CarbonBlack
-        ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) {
-                ScreenContent(
-                    tabIndex = selectedTabIndex,
-                    viewModel = viewModel,
-                    vehicleState = vehicleState,
-                    connectionState = connectionState,
-                    activePids = activePids,
-                    vehicleProfile = vehicleProfile,
-                    customDashboard = customDashboard,
-                    isScanningSensors = isScanningSensors,
-                    terminalLogs = terminalLogs,
-                    notificationMessage = notificationMessage,
-                    pairedBtDevices = pairedBtDevices,
-                    diagnosticLogs = diagnosticLogs,
-                    bluetoothErrorHint = bluetoothErrorHint
-                )
+                Text(if (type == ConnectionType.SIMULATION) "SIMULACIÓN · DATOS FICTICIOS" else if (compact) title else vehicle, color = TextMuted, fontSize = 10.sp, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
+            }
+            val label = when (status) {
+                ConnectionStatus.CONNECTED -> when (type) { ConnectionType.SIMULATION -> "Simulación"; ConnectionType.BLUETOOTH -> "Bluetooth"; ConnectionType.WIFI -> "WiFi" }
+                ConnectionStatus.CONNECTING -> "Conectando"
+                ConnectionStatus.INITIALIZING_ELM -> "Inicializando"
+                ConnectionStatus.RECONNECTING -> "Reconectando"
+                ConnectionStatus.DISCONNECTED -> "Sin conexión"
+                ConnectionStatus.ERROR -> "Error de enlace"
+            }
+            val color = when (status) { ConnectionStatus.CONNECTED -> if (type == ConnectionType.SIMULATION) NeonCyan else NeonGreen
+                ConnectionStatus.ERROR -> DangerRed; ConnectionStatus.DISCONNECTED -> TextMuted; else -> WarningAmber }
+            if (alert != null) {
+                if (compact) Icon(Icons.Default.Warning, contentDescription = alert, tint = WarningAmber, modifier = Modifier.size(18.dp))
+                else StatusPill(alert, WarningAmber)
+            }
+            StatusPill(label, color)
+            if (!compact) {
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(String.format(Locale.US, "%.1f/s", rate), color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text("CONSULTAS OBD", color = TextDim, fontSize = 8.sp, letterSpacing = 0.8.sp)
+                }
             }
         }
     }
@@ -262,165 +310,139 @@ private fun ScreenContent(
     connectionState: com.torqueobd2.dash.data.model.ConnectionState,
     activePids: List<com.torqueobd2.dash.data.model.ObdPid>,
     vehicleProfile: com.torqueobd2.dash.data.model.VehicleProfile,
-    customDashboard: com.torqueobd2.dash.data.model.CustomDashboardConfig,
+    savedVehicles: List<com.torqueobd2.dash.data.model.VehicleProfile>,
+    customDashboards: com.torqueobd2.dash.data.model.CustomDashboardTabs,
     isScanningSensors: Boolean,
     terminalLogs: List<String>,
     notificationMessage: String?,
     pairedBtDevices: List<com.torqueobd2.dash.data.model.DeviceItem>,
     diagnosticLogs: List<String>,
-    bluetoothErrorHint: String?
+    bluetoothErrorHint: String?,
+    selectedSettingsTab: Int,
+    onSettingsTabSelected: (Int) -> Unit,
+    onGridSensorsChanged: (Set<String>) -> Unit,
+    onVehicleSensorsChanged: (Set<String>) -> Unit,
+    dashboardFullScreen: Boolean, onDashboardFullScreenChanged: (Boolean) -> Unit
 ) {
     when (tabIndex) {
+        5 -> DtcDiagnosticsScreen(
+            state = viewModel.dtcState.collectAsState().value,
+            connection = connectionState,
+            catalog = viewModel.dtcCatalog.collectAsState().value,
+            onRead = viewModel::readTroubleCodes,
+            onCancel = viewModel::cancelDiagnostics,
+            onClear = viewModel::clearTroubleCodes
+        )
         0 -> SportDashboardScreen(
             vehicleState = vehicleState,
+            availablePids = activePids, connectionState = connectionState,
             isSimulationMode = connectionState.type == ConnectionType.SIMULATION,
-            onThrottleChanged = { viewModel.setManualThrottle(it) }
+            onThrottleChanged = { viewModel.setManualThrottle(it) },
+            maxRpm = vehicleProfile.maxRpm
         )
         1 -> CustomDashboardScreen(
-            customDashboard = customDashboard,
+            connectionState = connectionState,
+            storedDashboards = customDashboards,
+            onSelectTab = viewModel::selectDashboardTab,
+            onCreateTab = viewModel::createDashboardTab,
+            onRenameTab = viewModel::renameDashboardTab,
+            onMoveTab = viewModel::moveDashboardTab,
             availablePids = activePids,
             vehicleState = vehicleState,
             isSimulationMode = connectionState.type == ConnectionType.SIMULATION,
-            onAddWidget = { viewModel.addCustomWidget(it) },
-            onRemoveWidget = { viewModel.removeCustomWidget(it) },
-            onToggleSize = { viewModel.toggleWidgetSize(it) },
             onResetDefault = { viewModel.resetCustomDashboardToDefault() },
-            onThrottleChanged = { viewModel.setManualThrottle(it) }
+            onApplyPreset = viewModel::applyDashboardPreset,
+            onClearDashboard = { viewModel.clearCustomDashboard() },
+            onSelectGridLayout = { viewModel.setCustomGridLayout(it) },
+            onSetWidgetInSlot = { slot, widget -> viewModel.setWidgetInSlot(slot, widget) },
+            onClearSlot = { viewModel.clearSlot(it) },
+            onThrottleChanged = { viewModel.setManualThrottle(it) },
+            onDuplicateTab = viewModel::duplicateDashboardTab,
+            onDeleteTab = viewModel::deleteDashboardTab,
+            onTransferWidget = viewModel::transferDashboardWidget,
+            onDensityChanged = viewModel::setDashboardDensity,
+            onImportDesigns = viewModel::importDashboardDesigns,
+            onAddSensors = viewModel::addDashboardSensors,
+            fullScreen = dashboardFullScreen,
+            onFullScreenChanged = onDashboardFullScreenChanged
         )
-        2 -> DigitalHudScreen(
-            vehicleState = vehicleState,
-            isSimulationMode = connectionState.type == ConnectionType.SIMULATION,
-            onThrottleChanged = { viewModel.setManualThrottle(it) }
-        )
-        3 -> DpfDiagnosticsScreen(
-            vehicleState = vehicleState,
-            isSimulationMode = connectionState.type == ConnectionType.SIMULATION,
-            onThrottleChanged = { viewModel.setManualThrottle(it) }
-        )
-        4 -> VehicleConfigScreen(
-            currentProfile = vehicleProfile,
+        2 -> VehicleConfigScreen(
+            activeProfile = vehicleProfile,
+            savedVehicles = savedVehicles,
             allPids = activePids,
+            vehicleState = vehicleState,
+            connectionState = connectionState,
             isScanningSensors = isScanningSensors,
-            onSaveProfile = { viewModel.updateVehicleProfile(it) },
-            onScanSensors = { viewModel.scanSupportedSensors() }
-        )
-        5 -> GridMonitorScreen(vehicleState = vehicleState)
-        6 -> PidManagerScreen(
-            pids = activePids,
+            onSaveVehicle = { viewModel.createOrUpdateVehicle(it) },
+            onSetActiveVehicle = { viewModel.setActiveVehicle(it) },
+            onDeleteVehicle = { viewModel.deleteVehicle(it) },
+            onScanSensors = { viewModel.scanSupportedSensors() },
             onTogglePid = { id, en -> viewModel.togglePid(id, en) },
+            onVisibleSensorsChanged = onVehicleSensorsChanged
+        )
+        3 -> SensorsScreen(
+            vehicleState = vehicleState,
+            pids = activePids,
+            connectionState = connectionState,
+            onTogglePid = { id, enabled -> viewModel.togglePid(id, enabled) },
             onImportCsvFromStream = { viewModel.importCsvFromStream(it) },
             onImportCsvFromString = { viewModel.importCsvFromString(it) },
             onLoadSampleHonda = { viewModel.loadSampleHondaIdtecPids() },
             onLoadStandard = { viewModel.loadStandardPids() },
             notificationMessage = notificationMessage,
-            onClearNotification = { viewModel.clearNotification() }
+            onClearNotification = { viewModel.clearNotification() },
+            onScanSensors = { viewModel.scanSupportedSensors() },
+            isScanningSensors = isScanningSensors,
+            onVisibleSensorsChanged = onGridSensorsChanged
         )
-        7 -> ConnectionScreen(
-            connectionState = connectionState,
-            pairedDevices = pairedBtDevices,
-            diagnosticLogs = diagnosticLogs,
-            bluetoothErrorHint = bluetoothErrorHint,
-            onRefreshDevices = { viewModel.refreshPairedBtDevices() },
-            onSwitchToSimulation = { viewModel.switchToSimulation() },
-            onConnectBluetooth = { viewModel.connectBluetooth(it) },
-            onConnectWifi = { host, port -> viewModel.connectWifi(host, port) },
-            onDisconnect = { viewModel.disconnect() },
-            onClearDiagnosticLogs = { viewModel.clearDiagnosticLogs() }
-        )
-        8 -> TerminalScreen(
-            logs = terminalLogs,
-            onSendCommand = { viewModel.sendTerminalCommand(it) }
-        )
-    }
-}
-
-@Composable
-private fun TopStatusBar(
-    connectionType: ConnectionType,
-    connectionStatus: ConnectionStatus,
-    commandsPerSecond: Float,
-    isDpfAlert: Boolean,
-    estimatedHp: Float,
-    rangeKm: Float
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(DarkSurface)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = "TORQUE OBD2",
-            color = RacingOrange,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Black,
-            fontFamily = FontFamily.Monospace
-        )
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        val (modeText, modeBg) = when (connectionType) {
-            ConnectionType.SIMULATION -> "SIMULADOR" to NeonCyan.copy(alpha = 0.2f)
-            ConnectionType.BLUETOOTH -> "BT SPP" to NeonGreen.copy(alpha = 0.2f)
-            ConnectionType.WIFI -> "WIFI TCP" to WarningAmber.copy(alpha = 0.2f)
-        }
-
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(4.dp))
-                .background(modeBg)
-                .padding(horizontal = 6.dp, vertical = 2.dp)
-        ) {
-            Text(
-                text = modeText,
-                color = when (connectionType) {
-                    ConnectionType.SIMULATION -> NeonCyan
-                    ConnectionType.BLUETOOTH -> NeonGreen
-                    ConnectionType.WIFI -> WarningAmber
-                },
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace
-            )
-        }
-
-        if (estimatedHp > 5f) {
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "${estimatedHp.toInt()} CV",
-                color = TextWhite,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        if (isDpfAlert) {
-            Spacer(modifier = Modifier.width(6.dp))
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(Color(0xFF8B1A1A))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
-            ) {
-                Text(
-                    text = "DPF REGEN",
-                    color = TextWhite,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold
+        4 -> SettingsScreen(
+            selectedTabIndex = selectedSettingsTab,
+            onTabSelected = onSettingsTabSelected,
+            simulationEnabled = viewModel.simulationEnabled.collectAsState().value,
+            onSimulationChanged = viewModel::setSimulationEnabled,
+            pollingMode = viewModel.pollingMode.collectAsState().value,
+            onPollingModeChanged = viewModel::setPollingMode,
+            connectionContent = {
+                ConnectionScreen(
+                    connectionState = connectionState,
+                    pairedDevices = pairedBtDevices,
+                    diagnosticLogs = diagnosticLogs,
+                    bluetoothErrorHint = bluetoothErrorHint,
+                    onRefreshDevices = { viewModel.refreshPairedBtDevices() },
+                    isScanningBluetooth = viewModel.isScanningBluetooth.collectAsState().value,
+                    onScanBluetooth = { viewModel.scanBluetoothDevices() },
+                    onStopBluetoothScan = { viewModel.stopBluetoothDiscovery() },
+                    onConnectBluetooth = { viewModel.connectBluetooth(it) },
+                    onConnectWifi = { host, port -> viewModel.connectWifi(host, port) },
+                    onDisconnect = { viewModel.disconnect() },
+                    onClearDiagnosticLogs = { viewModel.clearDiagnosticLogs() },
+                    pollingMode = viewModel.pollingMode.collectAsState().value
                 )
+            },
+            terminalContent = {
+                TerminalScreen(
+                    logs = terminalLogs,
+                    onSendCommand = { viewModel.sendTerminalCommand(it) }
+                )
+            },
+            alertsContent = {
+                SensorAlertsScreen(vehicleProfile, activePids, viewModel.sensorAlerts.collectAsState().value,
+                    onSave = viewModel::saveSensorAlert, onEnabled = viewModel::setSensorAlertEnabled,
+                    onDelete = viewModel::deleteSensorAlert,
+                    onEnableSensor = { viewModel.togglePid(it, true) })
+            },
+            recordingContent = {
+                com.torqueobd2.dash.ui.screens.RecordingScreen(
+                    state = viewModel.recordingState.collectAsState().value,
+                    connection = connectionState,
+                    busy = viewModel.recordingBusy.collectAsState().value,
+                    backgroundEnabled = viewModel.backgroundEnabled.collectAsState().value,
+                    serviceRunning = viewModel.backgroundServiceRunning.collectAsState().value,
+                    error = viewModel.recordingError.collectAsState().value,
+                    onBackgroundEnabled = viewModel::setBackgroundEnabled,
+                    onStart = viewModel::startRecording, onStop = viewModel::stopRecording,
+                    onDelete = { viewModel.deleteRecording(it) }, onExport = viewModel::exportRecording)
             }
-        }
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        Text(
-            text = "${String.format("%.1f", commandsPerSecond)} Hz",
-            color = TextMuted,
-            fontSize = 11.sp,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.SemiBold
         )
     }
 }

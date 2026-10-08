@@ -18,9 +18,21 @@ data class ObdPid(
     val header: String = "", // ej. "DA10F1" o "" (vacío usa el header actual)
     val isCustom: Boolean = false,
     val isEnabled: Boolean = true,
-    val isSupported: Boolean = true, // Indica si la ECU del coche soporta este sensor
-    val category: PidCategory = PidCategory.ENGINE
+    val isSupported: Boolean = true, // Provisional hasta supportChecked; la ECU puede omitir campos individuales.
+    val category: PidCategory = PidCategory.ENGINE,
+    val supportChecked: Boolean = false,
+    // Bits de presencia y sentinelas del protocolo: un campo ausente nunca equivale a cero.
+    val availabilityEquation: String = "",
+    val unavailableRawValues: Map<String, Set<Int>> = emptyMap(),
+    val valueLabels: Map<Int, String> = emptyMap()
 ) {
+    val supportDescription: String
+        get() = when {
+            !supportChecked -> "Por comprobar"
+            isSupported -> "PID compatible"
+            else -> "No disponible"
+        }
+
     /**
      * Devuelve el comando exacto para enviar al ELM327 (ej. "222512" o "010C").
      */
@@ -33,11 +45,13 @@ data class ObdPid(
     }
 }
 
-enum class PidCategory {
-    ENGINE,
-    TRANSMISSION,
-    EXHAUST_DPF,
-    FUEL,
-    ELECTRICAL,
-    CUSTOM
+enum class PidCategory(val title: String) {
+    ENGINE("Motor"),
+    TRANSMISSION("Transmisión"),
+    EXHAUST_DPF("Escape / DPF"),
+    FUEL("Combustible"),
+    ELECTRICAL("Eléctrico / Híbrido"),
+    CUSTOM("Personalizados"),
+    OXYGEN("Oxígeno / Mezcla"),
+    DIAGNOSTICS("Diagnóstico")
 }

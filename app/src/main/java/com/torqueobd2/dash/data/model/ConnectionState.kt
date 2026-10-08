@@ -9,6 +9,7 @@ enum class ConnectionType {
 enum class ConnectionStatus {
     DISCONNECTED,
     CONNECTING,
+    RECONNECTING,
     INITIALIZING_ELM,
     CONNECTED,
     ERROR
@@ -16,20 +17,21 @@ enum class ConnectionStatus {
 
 data class DeviceItem(
     val name: String,
-    val address: String // MAC address para BT o "IP:Puerto" para WiFi
+    val address: String, // MAC address para BT o "IP:Puerto" para WiFi
+    val isPaired: Boolean = true
 )
 
 data class ConnectionState(
-    val type: ConnectionType = ConnectionType.SIMULATION,
-    val status: ConnectionStatus = ConnectionStatus.CONNECTED,
-    val activeDevice: DeviceItem? = DeviceItem("Simulador de Motor", "127.0.0.1"),
-    val statusMessage: String = "Modo simulación activo",
-    val elmVersion: String = "ELM327 v1.5 (Simulado)",
-    val protocol: String = "ISO 15765-4 CAN (11 bit ID, 500 kbaud)",
+    val type: ConnectionType = ConnectionType.BLUETOOTH,
+    val status: ConnectionStatus = ConnectionStatus.DISCONNECTED,
+    val activeDevice: DeviceItem? = null,
+    val statusMessage: String = "Selecciona un adaptador OBD para la primera conexión",
+    val elmVersion: String = "",
+    val protocol: String = "",
     val wifiHost: String = "192.168.0.10",
     val wifiPort: Int = 35000,
     val availableBtDevices: List<DeviceItem> = emptyList(),
     val isScanningBt: Boolean = false,
-    val commandsPerSecond: Float = 14.5f,
+    val commandsPerSecond: Float = 0f,
     val customInitCommands: List<String> = listOf("AT SP7", "AT SH DA10F1")
 )

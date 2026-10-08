@@ -10,17 +10,27 @@ android {
 
     defaultConfig {
         applicationId = "com.torqueobd2.dash"
-        minSdk = 29 // Android 10 (2019)
+        minSdk = 23 // Android 6+: also supports head units running an older system.
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 15
+        versionName = "1.6.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        getByName("debug") {
+            // Include the classic signature for head units with older package installers.
+            enableV1Signing = true
+            enableV2Signing = true
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -33,6 +43,9 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    packaging {
+        jniLibs.useLegacyPackaging = true
     }
 }
 

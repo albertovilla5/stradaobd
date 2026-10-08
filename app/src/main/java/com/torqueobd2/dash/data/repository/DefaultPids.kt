@@ -71,7 +71,7 @@ object DefaultPids {
             category = PidCategory.ENGINE
         ),
         ObdPid(
-            name = "Posición del Acelerador",
+            name = "Posición de Mariposa (ECU)",
             shortName = "Acelerador",
             modeAndPid = "0111",
             equation = "A*100/255",
@@ -131,7 +131,7 @@ object DefaultPids {
             category = PidCategory.ELECTRICAL
         ),
         ObdPid(
-            name = "Consumo Instantáneo Combustible",
+            name = "Caudal de Combustible (ECU)",
             shortName = "Consumo",
             modeAndPid = "015E",
             equation = "((A*256)+B)/20",
@@ -140,13 +140,13 @@ object DefaultPids {
             units = "L/h",
             category = PidCategory.FUEL
         )
-    )
+    ).map { it.copy(id = "SAE_${it.modeAndPid}_${it.shortName}") } + StandardPidCatalog.additionalPids()
 
     /**
      * Devuelve la lista parseada de los PIDs de Honda iDTEC.
      */
     fun getHondaIdtecPids(): List<ObdPid> {
         val result = com.torqueobd2.dash.data.parser.TorqueCsvParser.parseString(SAMPLE_HONDA_IDTEC_CSV)
-        return result.pids
+        return result.pids.map { it.copy(id = "HONDA_${it.shortName}") }
     }
 }

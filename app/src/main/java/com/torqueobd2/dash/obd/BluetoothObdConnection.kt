@@ -6,14 +6,24 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
 import com.torqueobd2.dash.data.model.ConnectionStatus
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.InputStream
 import java.io.OutputStream
 import java.io.IOException
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Conexión Bluetooth Clásica SPP (Serial Port Profile) de grado profesional para adaptadores ELM327 físicos.
@@ -50,6 +60,7 @@ class BluetoothObdConnection(
     private var socket: BluetoothSocket? = null
     private var inputStream: InputStream? = null
     private var outputStream: OutputStream? = null
+    private val commandMutex = Mutex()
 
     private fun log(message: String) {
         onLog?.invoke(message)
@@ -57,24 +68,24 @@ class BluetoothObdConnection(
 
     @SuppressLint("MissingPermission")
     override suspend fun connect(): Boolean = withContext(Dispatchers.IO) {
-        val adapter = BluetoothAdapter.getDefaultAdapter()
-        if (adapter == null) {
-            val msg = "Hardware Bluetooth no disponible en este dispositivo."
-            _status.value = ConnectionStatus.ERROR
-            _statusMessage.value = msg
-            log("❌ $msg")
-            return@withContext false
-        }
-
-        if (!adapter.isEnabled) {
-            val msg = "Bluetooth desactivado. Por favor, activa el Bluetooth en los ajustes del teléfono."
-            _status.value = ConnectionStatus.ERROR
-            _statusMessage.value = msg
-            log("❌ $msg")
-            return@withContext false
-        }
-
         try {
+            val adapter = BluetoothAdapter.getDefaultAdapter()
+            if (adapter == null) {
+                val msg = "Hardware Bluetooth no disponible en este dispositivo."
+                _status.value = ConnectionStatus.ERROR
+                _statusMessage.value = msg
+                log("❌ $msg")
+                return@withContext false
+            }
+
+            if (!adapter.isEnabled) {
+                val msg = "Bluetooth desactivado. Por favor, activa el Bluetooth en los ajustes del teléfono."
+                _status.value = ConnectionStatus.ERROR
+                _statusMessage.value = msg
+                log("❌ $msg")
+                return@withContext false
+            }
+
             _status.value = ConnectionStatus.CONNECTING
             _statusMessage.value = "Conectando a $deviceAddress..."
             log("🔌 Buscando dispositivo emparejado $deviceAddress...")
@@ -103,28 +114,33 @@ class BluetoothObdConnection(
             // Intento 1: Conexión mediante UUID SPP estándar
             log("Intentando enlace RFCOMM con UUID SPP estándar...")
             var connectedSocket: BluetoothSocket? = null
-            var lastException: Exception? = null
 
             try {
                 val s = device.createRfcommSocketToServiceRecord(SPP_UUID)
-                s.connect()
+                socket = s
+                connectSocket(s)
                 connectedSocket = s
                 log("✅ Conexión establecida mediante UUID SPP estándar.")
             } catch (e: IOException) {
-                lastException = e
+                try { socket?.close() } catch (_: IOException) {}
                 log("⚠️ Falló conexión por UUID estándar: ${e.message}. Probando método fallback (Canal RFCOMM 1)...")
             }
+
+            currentCoroutineContext().ensureActive()
 
             // Intento 2: Fallback por reflexión al canal RFCOMM 1 (esencial para adaptadores ELM327 clon)
             if (connectedSocket == null) {
                 try {
                     val method = device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
                     val fallbackSocket = method.invoke(device, 1) as BluetoothSocket
-                    fallbackSocket.connect()
+                    socket = fallbackSocket
+                    connectSocket(fallbackSocket)
                     connectedSocket = fallbackSocket
                     log("✅ Conexión establecida con éxito mediante canal alternativo RFCOMM 1.")
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
-                    lastException = e
+                    try { socket?.close() } catch (_: IOException) {}
                     log("❌ Falló también el método fallback: ${e.message}")
                 }
             }
@@ -147,7 +163,7 @@ class BluetoothObdConnection(
             log("⚙️ Inicializando chip ELM327...")
 
             // Pequeña pausa de 300ms para estabilizar el microcontrolador ELM327 tras la apertura del socket
-            Thread.sleep(300)
+            delay(300)
 
             // Secuencia de comandos AT
             val commandsToRun = mutableListOf<String>()
@@ -190,6 +206,10 @@ class BluetoothObdConnection(
             _statusMessage.value = "Conectado a $deviceName"
             log("🚀 Conexión completa y activa con $deviceName.")
             true
+        } catch (e: CancellationException) {
+            try { socket?.close() } catch (_: IOException) {}
+            _status.value = ConnectionStatus.DISCONNECTED
+            throw e
         } catch (e: Exception) {
             disconnect()
             val errMsg = "Error inesperado al conectar: ${e.localizedMessage ?: e.javaClass.simpleName}"
@@ -198,6 +218,27 @@ class BluetoothObdConnection(
             log("❌ $errMsg")
             false
         }
+    }
+
+    private suspend fun connectSocket(target: BluetoothSocket) = coroutineScope {
+        val finished = AtomicBoolean(false)
+        val timeout = launch(Dispatchers.IO, start = CoroutineStart.UNDISPATCHED) {
+            try {
+                delay(10_000)
+            } finally {
+                // Cerrar también al cancelar permite interrumpir BluetoothSocket.connect().
+                if (!finished.get()) try { target.close() } catch (_: IOException) {}
+            }
+        }
+        try {
+            target.connect()
+        } catch (e: SecurityException) {
+            throw IOException("Android denegó el permiso de conexión Bluetooth: ${e.message}", e)
+        } finally {
+            finished.set(true)
+            timeout.cancel()
+        }
+        currentCoroutineContext().ensureActive()
     }
 
     override suspend fun disconnect() = withContext(Dispatchers.IO) {
@@ -225,11 +266,13 @@ class BluetoothObdConnection(
     }
 
     override suspend fun sendCommand(command: String): String = withContext(Dispatchers.IO) {
-        if (!isConnected()) return@withContext "ERROR: NOT CONNECTED"
-        return@withContext sendCommandInternal(command, 2500L)
+        commandMutex.withLock {
+            if (!isConnected()) return@withLock "ERROR: NOT CONNECTED"
+            sendCommandInternal(command, 2500L)
+        }
     }
 
-    private fun sendCommandInternal(command: String, timeoutMs: Long = 2500L): String {
+    private suspend fun sendCommandInternal(command: String, timeoutMs: Long = 2500L): String {
         val out = outputStream ?: return "ERROR: NO OUTPUT STREAM"
         val inStream = inputStream ?: return "ERROR: NO INPUT STREAM"
 
@@ -244,13 +287,17 @@ class BluetoothObdConnection(
             out.flush()
 
             val sb = StringBuilder()
-            val startTime = System.currentTimeMillis()
+            val startTime = System.nanoTime()
 
-            while (System.currentTimeMillis() - startTime < timeoutMs) {
+            while ((System.nanoTime() - startTime) / 1_000_000 < timeoutMs) {
                 val avail = inStream.available()
                 if (avail > 0) {
                     val buffer = ByteArray(avail)
                     val len = inStream.read(buffer)
+                    if (len == -1) {
+                        _status.value = ConnectionStatus.DISCONNECTED
+                        throw IOException("Socket Bluetooth cerrado por el dispositivo (EOF)")
+                    }
                     if (len > 0) {
                         for (i in 0 until len) {
                             val c = buffer[i].toInt().toChar()
@@ -265,15 +312,25 @@ class BluetoothObdConnection(
                         }
                     }
                 } else {
-                    Thread.sleep(15)
+                    if (socket?.isConnected != true) {
+                        _status.value = ConnectionStatus.DISCONNECTED
+                        throw IOException("Socket Bluetooth desconectado")
+                    }
+                    delay(2)
                 }
             }
 
             val result = sb.toString()
-            if (result.isEmpty()) {
-                return "TIMEOUT: Sin respuesta del adaptador"
+            if (!result.contains('>')) {
+                throw IOException("Sin respuesta completa del adaptador a $command en ${timeoutMs}ms")
             }
             return result
+        } catch (e: IOException) {
+            _status.value = ConnectionStatus.DISCONNECTED
+            log("❌ Pérdida de conexión con ELM327: ${e.message}")
+            throw e
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             return "ERROR I/O: ${e.message}"
         }

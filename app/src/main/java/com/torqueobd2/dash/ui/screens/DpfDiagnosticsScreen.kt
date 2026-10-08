@@ -1,134 +1,58 @@
 package com.torqueobd2.dash.ui.screens
 
+import com.torqueobd2.dash.ui.automotive.uiLayoutScale
+import com.torqueobd2.dash.ui.automotive.CarText as Text
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.torqueobd2.dash.data.model.VehicleState
-import com.torqueobd2.dash.ui.components.ControlPedalSlider
-import com.torqueobd2.dash.ui.components.DpfMonitorCard
-import com.torqueobd2.dash.ui.components.RealtimeChart
-import com.torqueobd2.dash.ui.theme.CarbonBlack
-import com.torqueobd2.dash.ui.theme.CardBackground
-import com.torqueobd2.dash.ui.theme.DangerRed
-import com.torqueobd2.dash.ui.theme.NeonCyan
-import com.torqueobd2.dash.ui.theme.RacingOrange
-import com.torqueobd2.dash.ui.theme.TextMuted
-import com.torqueobd2.dash.ui.theme.TextWhite
+import com.torqueobd2.dash.ui.components.*
+import com.torqueobd2.dash.ui.theme.*
+import com.torqueobd2.dash.data.model.telemetryText
+import java.util.Locale
 
-/**
- * Pantalla especializada de diagnóstico para Filtro de Partículas (DPF) y PIDs específicos de Honda i-DTEC.
- */
 @Composable
-fun DpfDiagnosticsScreen(
-    vehicleState: VehicleState,
-    isSimulationMode: Boolean,
-    onThrottleChanged: (Float?) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(CarbonBlack)
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Tarjeta principal de estado del DPF y gases
-        DpfMonitorCard(
-            diffPressureKpa = vehicleState.dpfDifferentialPressureKpa,
-            egtTempC = vehicleState.exhaustGasTemp1C,
-            pmGrams = vehicleState.dpfCalculatedPmGrams,
-            distLastRegenKm = vehicleState.dpfDistanceLastRegenKm,
-            fuelLastRegenL = vehicleState.dpfFuelLastRegenL,
-            isRegenActive = vehicleState.dpfActiveRegen,
-            oilLevelMm = vehicleState.engineOilLevelMm,
-            exhaustFlowM3h = vehicleState.dpfExhaustFlowM3h
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Gráficos en tiempo real de Presión diferencial y Temperatura EGT
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            val diffPoints = vehicleState.sparklineHistory["DPF diff.pres"] ?: emptyList()
-            RealtimeChart(
-                title = "Presión Diferencial (kPa)",
-                points = diffPoints,
-                currentValue = String.format("%.2f", vehicleState.dpfDifferentialPressureKpa),
-                unit = "kPa",
-                lineColor = if (vehicleState.dpfDifferentialPressureKpa > 20f) DangerRed else NeonCyan,
-                modifier = Modifier.weight(1f)
-            )
-
-            val egtPoints = vehicleState.sparklineHistory["EGT"] ?: emptyList()
-            RealtimeChart(
-                title = "Temperatura EGT 1 (°C)",
-                points = egtPoints,
-                currentValue = vehicleState.exhaustGasTemp1C.toInt().toString(),
-                unit = "°C",
-                lineColor = RacingOrange,
-                modifier = Modifier.weight(1f)
-            )
+fun DpfDiagnosticsScreen(vehicleState: VehicleState, isSimulationMode: Boolean,
+    onThrottleChanged: (Float?) -> Unit, modifier: Modifier = Modifier) {
+    var throttleExpanded by rememberSaveable { mutableStateOf(false) }
+    val card: @Composable (Modifier) -> Unit = { cardModifier ->
+        DpfMonitorCard(vehicleState.dpfDifferentialPressureKpa, vehicleState.exhaustGasTemp1C,
+            vehicleState.dpfCalculatedPmGrams, vehicleState.dpfDistanceLastRegenKm, vehicleState.dpfFuelLastRegenL,
+            vehicleState.readings["HONDA_DPF active reg"]?.formatted() ?: "—", vehicleState.engineOilLevelMm, vehicleState.dpfExhaustFlowM3h, cardModifier)
+    }
+    val charts: @Composable (Modifier) -> Unit = { chartModifier ->
+        Column(chartModifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            RealtimeChart("Contrapresión", vehicleState.sparklineHistory["HONDA_DPF diff.pres"] ?: emptyList(),
+                vehicleState.dpfDifferentialPressureKpa.telemetryText(2), "kPa", NeonCyan,
+                modifier = Modifier.weight(1f).fillMaxWidth())
+            RealtimeChart("Temperatura EGT", vehicleState.sparklineHistory["HONDA_EGT"] ?: emptyList(),
+                vehicleState.exhaustGasTemp1C.telemetryText(), "°C", RacingOrange,
+                modifier = Modifier.weight(1f).fillMaxWidth())
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Tarjeta informativa con diagnóstico de salud del DPF
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(CardBackground)
-                .border(1.dp, Color(0xFF28303D), RoundedCornerShape(14.dp))
-                .padding(14.dp)
-        ) {
-            Column {
-                Text(
-                    text = "Diagnóstico del Sistema de Escape",
-                    color = TextWhite,
-                    fontSize = 13.sp,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = when {
-                        vehicleState.dpfActiveRegen -> "Regeneración activa en curso. Mantener el motor a régimen medio (2000-2500 RPM) hasta completar el ciclo."
-                        vehicleState.dpfDifferentialPressureKpa > 20f -> "Presión diferencial alta (>20 kPa): El filtro requiere regeneración próxima."
-                        vehicleState.engineOilLevelMm > 115f -> "Advertencia: Nivel de aceite alto (>115 mm), posible dilución por regeneraciones fallidas."
-                        else -> "Valores nominales saludables. La contrapresión del escape y el cálculo de hollín se encuentran en rango óptimo."
-                    },
-                    color = TextMuted,
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp
-                )
+    }
+    ResponsiveCanvas(modifier.background(CarbonBlack), minimumHeight = { width, scale ->
+        (if (width >= 500.dp * scale) 210.dp else 490.dp) * scale + 44.dp +
+            (if (isSimulationMode) (if (throttleExpanded) 104.dp else 54.dp) * scale else 0.dp)
+    }) {
+        val wide = maxWidth >= 500.dp * uiLayoutScale()
+        Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (wide) Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                card(Modifier.weight(1.25f).fillMaxHeight())
+                charts(Modifier.weight(1f).fillMaxHeight())
+            } else {
+                card(Modifier.fillMaxWidth())
+                charts(Modifier.weight(1f).fillMaxWidth())
             }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        if (isSimulationMode) {
-            ControlPedalSlider(onThrottleChanged = onThrottleChanged)
+            Row(Modifier.fillMaxWidth().racingPanel(12.dp).padding(horizontal = 12.dp, vertical = 9.dp)) {
+                Text("PIDs Honda según CSV · Los códigos de regeneración requieren validación para tu ECU.",
+                    color = TextMuted, fontSize = 11.sp, maxLines = 2)
+            }
+            if (isSimulationMode) ControlPedalSlider(onThrottleChanged, onExpandedChanged = { throttleExpanded = it })
         }
     }
 }

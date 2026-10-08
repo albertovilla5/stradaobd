@@ -1,7 +1,22 @@
 package com.torqueobd2.dash.ui.screens
 
+import com.torqueobd2.dash.ui.automotive.CarText as Text
+import com.torqueobd2.dash.ui.automotive.CarIcon as Icon
+import com.torqueobd2.dash.ui.automotive.CarButton as Button
+import com.torqueobd2.dash.ui.automotive.CarOutlinedButton as OutlinedButton
+import com.torqueobd2.dash.ui.automotive.CarIconButton as IconButton
+import com.torqueobd2.dash.ui.automotive.*
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Terminal
+import com.torqueobd2.dash.ui.components.RacingHeader
+
+import com.torqueobd2.dash.ui.components.racingPanel
+
 import android.content.Intent
+import android.content.ActivityNotFoundException
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -31,21 +46,17 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,8 +68,12 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.torqueobd2.dash.data.model.ConnectionState
 import com.torqueobd2.dash.data.model.ConnectionStatus
+import com.torqueobd2.dash.data.model.PollingMode
 import com.torqueobd2.dash.data.model.ConnectionType
 import com.torqueobd2.dash.data.model.DeviceItem
 import com.torqueobd2.dash.ui.theme.CarbonBlack
@@ -71,6 +86,7 @@ import com.torqueobd2.dash.ui.theme.TextMuted
 import com.torqueobd2.dash.ui.theme.TextWhite
 import com.torqueobd2.dash.ui.theme.WarningAmber
 import com.torqueobd2.dash.util.BluetoothPermissionHelper
+import com.torqueobd2.dash.util.DeviceDiagnostics
 
 /**
  * Pantalla de configuración y gestión de conexión para ELM327 Bluetooth, WiFi y Modo Simulación.
@@ -83,38 +99,67 @@ fun ConnectionScreen(
     diagnosticLogs: List<String>,
     bluetoothErrorHint: String?,
     onRefreshDevices: () -> Unit,
-    onSwitchToSimulation: () -> Unit,
+    isScanningBluetooth: Boolean,
+    onScanBluetooth: () -> Unit,
+    onStopBluetoothScan: () -> Unit,
     onConnectBluetooth: (DeviceItem) -> Unit,
     onConnectWifi: (String, Int) -> Unit,
     onDisconnect: () -> Unit,
     onClearDiagnosticLogs: () -> Unit,
+    pollingMode: PollingMode,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val deviceInfo = remember(context) { DeviceDiagnostics.describe(context) }
 
-    var wifiHost by remember { mutableStateOf(connectionState.wifiHost) }
-    var wifiPortStr by remember { mutableStateOf(connectionState.wifiPort.toString()) }
+    var wifiHost by rememberSaveable { mutableStateOf(connectionState.wifiHost) }
+    var wifiPortStr by rememberSaveable { mutableStateOf(connectionState.wifiPort.toString()) }
+    var scanAfterPermission by remember { mutableStateOf(false) }
     var hasPermissions by remember { mutableStateOf(BluetoothPermissionHelper.hasAllPermissions(context)) }
     var showLogsCopiedToast by remember { mutableStateOf(false) }
 
     // Launcher para pedir permisos de Bluetooth en tiempo de ejecución (Android 10 - 15)
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { results ->
-        hasPermissions = results.values.all { it }
-        if (hasPermissions) {
-            onRefreshDevices()
-        }
+    ) {
+        hasPermissions = BluetoothPermissionHelper.hasAllPermissions(context)
+        if (hasPermissions) onRefreshDevices()
+        if (scanAfterPermission && BluetoothPermissionHelper.hasScanPermissions(context)) onScanBluetooth()
+        scanAfterPermission = false
     }
 
-    LaunchedEffect(Unit) {
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasPermissions = BluetoothPermissionHelper.hasAllPermissions(context)
+                onRefreshDevices()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
         hasPermissions = BluetoothPermissionHelper.hasAllPermissions(context)
         if (hasPermissions) {
             onRefreshDevices()
         }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            onStopBluetoothScan()
+        }
     }
 
+    val car = LocalCarMode.current
+    var carSection by rememberSaveable { mutableStateOf<Int?>(null) }
+    BackHandler(enabled = car && carSection != null) { carSection = null }
+    if (car && carSection == null) {
+        CarMenu(listOf(
+            CarMenuEntry("Bluetooth", "Elegir adaptador ELM327", Icons.Default.Bluetooth) { carSection = 0 },
+            CarMenuEntry("WiFi", "Conexión por IP y puerto", Icons.Default.Wifi) { carSection = 1 },
+            CarMenuEntry("Estado del enlace", "Conexión y reconexión", Icons.Default.Tune) { carSection = 2 },
+            CarMenuEntry("Registro del enlace", "Detalles del adaptador", Icons.Default.Terminal) { carSection = 3 }
+        ))
+        return
+    }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -122,22 +167,15 @@ fun ConnectionScreen(
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
-        Text(
-            text = "CONEXIÓN ELM327 / OBD2",
-            color = RacingOrange,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = "Conecta tu adaptador ELM327 por Bluetooth o WiFi, o prueba el cuadro con el simulador.",
-            color = TextMuted,
-            fontSize = 12.sp
-        )
+        if (car) OutlinedButton(onClick = { carSection = null }) { Text("Volver a conexión") }
+        else RacingHeader("Centro de conexión", "Reconexión automática al último OBD. Puedes seleccionar otro adaptador.", eyebrow = "ENLACE / ELM327")
 
         Spacer(modifier = Modifier.height(14.dp))
+        if (!car || carSection == 3) Text(text = deviceInfo, color = TextMuted, fontSize = 11.sp)
+        Spacer(modifier = Modifier.height(10.dp))
 
         // AVISO DE PERMISOS BLUETOOTH SI NO ESTÁN CONCEDIDOS
-        if (!hasPermissions) {
+        if (!hasPermissions && (!car || carSection == 0)) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -180,13 +218,12 @@ fun ConnectionScreen(
             Spacer(modifier = Modifier.height(14.dp))
         }
 
+        if (!car || carSection == 2) {
         // TARJETA DE ESTADO ACTUAL DE LA CONEXIÓN
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(CardBackground)
-                .border(1.dp, Color(0xFF28303D), RoundedCornerShape(14.dp))
+                .racingPanel()
                 .padding(16.dp)
         ) {
             Column {
@@ -195,7 +232,7 @@ fun ConnectionScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Column(Modifier.weight(1f)) {
                         Text(
                             text = "ESTADO DE CONEXIÓN",
                             color = TextMuted,
@@ -217,6 +254,7 @@ fun ConnectionScreen(
                     val statusColor = when (connectionState.status) {
                         ConnectionStatus.CONNECTED -> NeonGreen
                         ConnectionStatus.CONNECTING, ConnectionStatus.INITIALIZING_ELM -> WarningAmber
+                        ConnectionStatus.RECONNECTING -> RacingOrange
                         ConnectionStatus.ERROR -> DangerRed
                         ConnectionStatus.DISCONNECTED -> TextMuted
                     }
@@ -230,7 +268,8 @@ fun ConnectionScreen(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (connectionState.status == ConnectionStatus.CONNECTING ||
-                                connectionState.status == ConnectionStatus.INITIALIZING_ELM
+                                connectionState.status == ConnectionStatus.INITIALIZING_ELM ||
+                                connectionState.status == ConnectionStatus.RECONNECTING
                             ) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(12.dp),
@@ -243,6 +282,7 @@ fun ConnectionScreen(
                                 text = when (connectionState.status) {
                                     ConnectionStatus.CONNECTED -> "CONECTADO"
                                     ConnectionStatus.CONNECTING -> "CONECTANDO..."
+                                    ConnectionStatus.RECONNECTING -> "RECONECTANDO..."
                                     ConnectionStatus.INITIALIZING_ELM -> "INICIALIZANDO..."
                                     ConnectionStatus.ERROR -> "ERROR"
                                     ConnectionStatus.DISCONNECTED -> "DESCONECTADO"
@@ -305,27 +345,32 @@ fun ConnectionScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Cadencia de muestreo:",
+                        text = "Consultas al adaptador:",
                         color = TextMuted,
                         fontSize = 12.sp
                     )
                     Text(
-                        text = "${String.format("%.1f", connectionState.commandsPerSecond)} PIDs/seg",
+                        text = "${String.format("%.1f", connectionState.commandsPerSecond)} consultas/s",
                         color = NeonCyan,
                         fontSize = 12.sp,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = FontFamily.SansSerif,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
-                if (connectionState.status == ConnectionStatus.CONNECTED) {
+                if (connectionState.status == ConnectionStatus.CONNECTED && pollingMode == PollingMode.VISIBLE) {
+                    Text("Solo pantalla: aquí no se consultan sensores. Abre un cuadro para ver la frecuencia de lectura.",
+                        color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                }
+
+                if (connectionState.status != ConnectionStatus.DISCONNECTED) {
                     Spacer(modifier = Modifier.height(12.dp))
                     OutlinedButton(
                         onClick = onDisconnect,
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Desconectar Adaptador", color = DangerRed, fontWeight = FontWeight.Bold)
+                        Text(if (connectionState.status == ConnectionStatus.CONNECTED) "Desconectar Adaptador" else "Detener reconexión", color = DangerRed, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -333,17 +378,19 @@ fun ConnectionScreen(
 
         Spacer(modifier = Modifier.height(18.dp))
 
+        }
+        if (!car || carSection == 0) {
         // SECCIÓN 1: BLUETOOTH REAL ELM327
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Bluetooth, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "ADAPTADORES BLUETOOTH (ELM327)",
+                    text = if (car) "Bluetooth" else "ADAPTADORES BLUETOOTH (ELM327)",
                     color = TextWhite,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
@@ -373,26 +420,44 @@ fun ConnectionScreen(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
+        OutlinedButton(
+            onClick = {
+                if (isScanningBluetooth) onStopBluetoothScan()
+                else if (BluetoothPermissionHelper.hasScanPermissions(context)) onScanBluetooth()
+                else {
+                    scanAfterPermission = true
+                    permissionLauncher.launch(BluetoothPermissionHelper.getScanPermissions().toTypedArray())
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(if (isScanningBluetooth) "Detener búsqueda" else "Buscar adaptadores cercanos", color = NeonCyan)
+        }
+        Text("Emparejados y encontrados en la búsqueda. Al elegir uno nuevo, Android puede pedir su PIN. La simulación se activa desde la pestaña General.",
+            color = TextMuted, fontSize = 11.sp, modifier = Modifier.padding(vertical = 8.dp))
+        OutlinedButton(onClick = { openBluetoothSettings(context) }, modifier = Modifier.fillMaxWidth()) {
+            Text("Ajustes de Bluetooth de Android", color = NeonCyan)
+        }
+        Spacer(Modifier.height(8.dp))
+
         // LISTA DE DISPOSITIVOS EMPAREJADOS
         if (pairedDevices.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(CardBackground)
-                    .border(1.dp, Color(0xFF28303D), RoundedCornerShape(10.dp))
+                    .racingPanel()
                     .padding(14.dp)
             ) {
                 Column {
                     Text(
-                        text = "No se detectaron dispositivos Bluetooth emparejados.",
+                        text = "No hay adaptadores emparejados ni encontrados.",
                         color = TextWhite,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Para conectar un ELM327 físico:\n1. Conéctalo a la toma OBD-II del vehículo.\n2. Pon la llave del coche en contacto (ON).\n3. Abre Ajustes de Bluetooth en tu móvil, busca nuevos dispositivos y empareja el adaptador (PIN habitual: 1234 o 0000).\n4. Vuelve a esta app y pulsa el botón Actualizar.",
+                        text = "Para conectar un ELM327 físico:\n1. Conéctalo a la toma OBD-II del vehículo.\n2. Pon la llave del coche en contacto (ON).\n3. Empareja el adaptador en Ajustes de Bluetooth de la radio (PIN habitual: 1234 o 0000).\n4. Vuelve a esta app.\nSi el ELM327 aparece solo en la app de fábrica y no aquí, el Bluetooth de la radio puede no estar disponible para otras apps; prueba un ELM327 WiFi.",
                         color = TextMuted,
                         fontSize = 11.sp,
                         lineHeight = 16.sp
@@ -400,8 +465,7 @@ fun ConnectionScreen(
                     Spacer(modifier = Modifier.height(10.dp))
                     OutlinedButton(
                         onClick = {
-                            val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
-                            context.startActivity(intent)
+                            openBluetoothSettings(context)
                         },
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.fillMaxWidth()
@@ -428,7 +492,7 @@ fun ConnectionScreen(
                             .background(if (isCurrentDevice) Color(0xFF142C24) else CardBackground)
                             .border(
                                 1.dp,
-                                if (isCurrentDevice) NeonGreen else if (isObd) NeonCyan.copy(alpha = 0.5f) else Color(0xFF28303D),
+                                if (isCurrentDevice) NeonGreen else if (isObd) NeonCyan.copy(alpha = 0.5f) else Color(0xFF293341),
                                 RoundedCornerShape(10.dp)
                             )
                             .padding(12.dp)
@@ -459,10 +523,10 @@ fun ConnectionScreen(
                                     }
                                 }
                                 Text(
-                                    text = dev.address,
+                                    text = "${dev.address} · ${if (dev.isPaired) "Emparejado" else "Encontrado"}",
                                     color = TextMuted,
                                     fontSize = 11.sp,
-                                    fontFamily = FontFamily.Monospace
+                                    fontFamily = FontFamily.SansSerif
                                 )
                             }
 
@@ -492,39 +556,14 @@ fun ConnectionScreen(
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        // SECCIÓN 2: MODO SIMULACIÓN
-        Text(
-            text = "MODO SIMULACIÓN (PRUEBAS SIN COCHE)",
-            color = TextWhite,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        Button(
-            onClick = onSwitchToSimulation,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (connectionState.type == ConnectionType.SIMULATION && connectionState.status == ConnectionStatus.CONNECTED)
-                    NeonGreen.copy(alpha = 0.8f) else Color(0xFF242E3D)
-            ),
-            shape = RoundedCornerShape(10.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(
-                text = if (connectionState.type == ConnectionType.SIMULATION && connectionState.status == ConnectionStatus.CONNECTED)
-                    "✓ Modo Simulación en Ejecución" else "Cambiar a Modo Simulación",
-                fontWeight = FontWeight.Bold,
-                color = TextWhite
-            )
         }
-
-        Spacer(modifier = Modifier.height(18.dp))
-
+        if (!car || carSection == 1) {
         // SECCIÓN 3: WIFI / TCP
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.Wifi, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-                text = "ADAPTADOR WIFI ELM327 (TCP)",
+                text = if (car) "WiFi / TCP" else "ADAPTADOR WIFI ELM327 (TCP)",
                 color = TextWhite,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold
@@ -534,9 +573,7 @@ fun ConnectionScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(CardBackground)
-                .border(1.dp, Color(0xFF28303D), RoundedCornerShape(10.dp))
+                .racingPanel()
                 .padding(12.dp)
         ) {
             Column {
@@ -544,13 +581,13 @@ fun ConnectionScreen(
                     OutlinedTextField(
                         value = wifiHost,
                         onValueChange = { wifiHost = it },
-                        label = { Text("IP Host (ej: 192.168.0.10)") },
+                        label = { Text(if (car) "Dirección IP" else "IP Host (ej: 192.168.0.10)") },
                         modifier = Modifier.weight(2f)
                     )
                     OutlinedTextField(
                         value = wifiPortStr,
                         onValueChange = { wifiPortStr = it },
-                        label = { Text("Puerto (ej: 35000)") },
+                        label = { Text(if (car) "Puerto" else "Puerto (ej: 35000)") },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -571,17 +608,19 @@ fun ConnectionScreen(
 
         Spacer(modifier = Modifier.height(18.dp))
 
+        }
+        if (!car || carSection == 3) {
         // SECCIÓN 4: REGISTRO DE DIAGNÓSTICO EN TIEMPO REAL (MÁXIMA PROFUNDIDAD DE DETALLE)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Info, contentDescription = null, tint = WarningAmber, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "REGISTRO DE DIAGNÓSTICO EN VIVO",
+                    text = if (car) "Registro del enlace" else "REGISTRO DE DIAGNÓSTICO EN VIVO",
                     color = TextWhite,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
@@ -590,7 +629,7 @@ fun ConnectionScreen(
 
             Row {
                 IconButton(onClick = {
-                    val fullText = diagnosticLogs.joinToString("\n")
+                    val fullText = deviceInfo + "\n\n" + diagnosticLogs.joinToString("\n")
                     clipboardManager.setText(AnnotatedString(fullText))
                     showLogsCopiedToast = true
                 }) {
@@ -636,7 +675,7 @@ fun ConnectionScreen(
                         text = "No hay eventos registrados aún. Al conectar el ELM327 verás aquí el handshake detallado paso a paso.",
                         color = TextMuted,
                         fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = FontFamily.SansSerif
                     )
                 } else {
                     diagnosticLogs.forEach { logLine ->
@@ -652,12 +691,27 @@ fun ConnectionScreen(
                             text = logLine,
                             color = color,
                             fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = FontFamily.SansSerif,
                             lineHeight = 14.sp
                         )
                     }
                 }
             }
         }
+        }
     }
+}
+
+private fun openBluetoothSettings(context: android.content.Context) {
+    for (action in listOf(Settings.ACTION_BLUETOOTH_SETTINGS, Settings.ACTION_SETTINGS)) {
+        try {
+            context.startActivity(Intent(action))
+            return
+        } catch (_: ActivityNotFoundException) {
+            // Some head units only provide their own settings activity.
+        } catch (_: SecurityException) {
+            // Try the general settings screen if the vendor restricts Bluetooth settings.
+        }
+    }
+    Toast.makeText(context, "Abre los ajustes de Bluetooth desde el menú de la radio.", Toast.LENGTH_LONG).show()
 }

@@ -2,21 +2,29 @@ package com.torqueobd2.dash.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val CarbonBlack = Color(0xFF0C0E12)
-val DarkSurface = Color(0xFF14181F)
-val DarkSurfaceVariant = Color(0xFF1D232C)
-val CardBackground = Color(0xFF181C24)
-val BorderDark = Color(0xFF2B3340)
+val CarbonBlack = Color(0xFF090C11)
+val DarkSurface = Color(0xFF10151D)
+val DarkSurfaceVariant = Color(0xFF1B2430)
+val CardBackground = Color(0xFF151C26)
+val BorderDark = Color(0xFF293341)
 
 // Acentos automotrices
-val RacingOrange = Color(0xFFFF6D00)
-val NeonCyan = Color(0xFF00E5FF)
-val NeonGreen = Color(0xFF00E676)
-val WarningAmber = Color(0xFFFFD600)
-val DangerRed = Color(0xFFFF1744)
-val GaugeRedline = Color(0xFFFF2A4A)
+val RacingOrange = Color(0xFFFF713D)
+val NeonCyan = Color(0xFF6EDAD5)
+val NeonGreen = Color(0xFF6DD9A2)
+val WarningAmber = Color(0xFFF4C568)
+val DangerRed = Color(0xFFFF657A)
+val GaugeRedline = DangerRed
 
 // Textos
-val TextWhite = Color(0xFFF0F4F8)
-val TextMuted = Color(0xFF8B98A5)
-val TextDim = Color(0xFF536471)
+val TextWhite = Color(0xFFF1F4F8)
+val TextMuted = Color(0xFF9AA8BA)
+val TextDim = Color(0xFF738298)
+
+// Paleta del cockpit: superficies neutras y acentos fríos, sin texturas ni marcos deportivos.
+val CockpitBackground = Color(0xFF0B0E14)
+val CockpitSurface = Color(0xFF171B24)
+val CockpitElevated = Color(0xFF202633)
+val CockpitAccent = Color(0xFF9DBAFF)
+val CockpitTeal = Color(0xFF8AE6D2)
+val CockpitMuted = Color(0xFFAAB3C5)

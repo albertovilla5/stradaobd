@@ -1,45 +1,91 @@
 package com.torqueobd2.dash.obd
 
+import com.torqueobd2.dash.data.model.*
+import com.torqueobd2.dash.data.parser.DiagnosticResponseParser
 import com.torqueobd2.dash.data.model.ConnectionState
 import com.torqueobd2.dash.data.model.ConnectionStatus
 import com.torqueobd2.dash.data.model.ConnectionType
 import com.torqueobd2.dash.data.model.DeviceItem
 import com.torqueobd2.dash.data.model.ObdPid
 import com.torqueobd2.dash.data.model.ObdReading
+import com.torqueobd2.dash.data.model.PollingMode
+import com.torqueobd2.dash.data.model.CustomDashboardConfig
 import com.torqueobd2.dash.data.model.VehicleProfile
 import com.torqueobd2.dash.data.model.VehicleState
+import com.torqueobd2.dash.data.model.SensorTelemetryStatus
+import com.torqueobd2.dash.data.model.SensorIds
+import com.torqueobd2.dash.data.parser.PidDecoder
+import com.torqueobd2.dash.data.parser.PidFieldUnavailableException
 import com.torqueobd2.dash.data.parser.EquationEvaluator
 import com.torqueobd2.dash.data.parser.SupportedPidsDetector
 import com.torqueobd2.dash.data.repository.DefaultPids
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 
 /**
  * Gestor central de OBD2: coordina la conexión física o simulada,
  * ejecuta el ciclo de lectura (polling) de PIDs soportados, evalúa ecuaciones matemáticas,
- * procesa la física del vehículo según el perfil configurado y actualiza el estado unificado.
+ * rechaza datos inválidos y actualiza el estado unificado sin estimaciones.
  */
 class ObdManager(
     private val scope: CoroutineScope,
-    initialProfile: VehicleProfile = VehicleProfile()
+    initialProfile: VehicleProfile = VehicleProfile(),
+    private val onRealConnectionEstablished: (ConnectionState) -> Unit = {},
+    private val canConnect: (ConnectionType) -> Boolean = { true },
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val connectionFactory: ((ConnectionState) -> ObdConnection)? = null,
+    private val retryDelayMillis: (Long) -> Long = { minOf(it * 2000L, 8000L) },
+    initialPollingMode: PollingMode = PollingMode.VISIBLE,
+    private val readingTimeoutMillis: Long = 5000L,
+    private val onReading: suspend (ObdReading, ObdPid, VehicleProfile, ConnectionState) -> Unit = { _, _, _, _ -> }
 ) {
     private var connection: ObdConnection = SimulatedObdConnection()
     private var pollingJob: Job? = null
+    private var freshnessJob: Job? = null
+    private var connectionJob: Job? = null
+    private var dtcJob: Job? = null
+    private val diagnosticGeneration = java.util.concurrent.atomic.AtomicLong()
+    private val diagnosticSession: Long get() = diagnosticGeneration.get()
+    private val _dtcState = MutableStateFlow(DtcDiagnosticState())
+    val dtcState = _dtcState.asStateFlow()
+    private var pollingPaused = false
+    private val telemetryLock = Any()
+    private val alertEvaluator = SensorAlertEvaluator()
+    private val alertRules = MutableStateFlow<List<SensorAlertRule>>(emptyList())
+    private val _sensorAlerts = MutableStateFlow<List<SensorAlertState>>(emptyList())
+    val sensorAlerts = _sensorAlerts.asStateFlow()
+    private val sessionMutex = Mutex()
+    private val commandSequenceMutex = Mutex()
+    private var adapterHeader = ""
+    private val pollingSelection = MutableStateFlow(
+        initialPollingMode to ObdPollingPolicy.screenSensors(0, CustomDashboardConfig())
+    )
+    private var isManuallyDisconnected = false
+    private val recordingActive = MutableStateFlow(false)
+    private val backgroundReading = MutableStateFlow(false)
+
+    fun setBackgroundReading(active: Boolean) { backgroundReading.value = active }
+    fun setRecordingActive(active: Boolean) { recordingActive.value = active }
 
     private val _connectionState = MutableStateFlow(
-        ConnectionState(
-            type = ConnectionType.SIMULATION,
-            status = ConnectionStatus.CONNECTED,
-            activeDevice = DeviceItem("Simulador Automotriz", "local"),
-            statusMessage = "Modo simulación en ejecución"
-        )
+        ConnectionState(customInitCommands = parseInitCommands(initialProfile.customInitCommands))
     )
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
@@ -52,11 +98,10 @@ class ObdManager(
     private val _activePids = MutableStateFlow<List<ObdPid>>(emptyList())
     val activePids: StateFlow<List<ObdPid>> = _activePids.asStateFlow()
 
-    private val sparklineHistory = mutableMapOf<String, MutableList<Float>>()
 
     private val _diagnosticLogs = MutableStateFlow<List<String>>(
         listOf(
-            "[${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}] Sistema OBD2 iniciado en modo simulación."
+            "[${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}] Sistema OBD2 iniciado. Simulación desactivada."
         )
     )
     val diagnosticLogs: StateFlow<List<String>> = _diagnosticLogs.asStateFlow()
@@ -64,12 +109,9 @@ class ObdManager(
     fun logDiagnostic(entry: String) {
         val time = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
         val formatted = "[$time] $entry"
-        val list = _diagnosticLogs.value.toMutableList()
-        list.add(formatted)
-        if (list.size > 200) {
-            list.removeAt(0)
+        _diagnosticLogs.update { entries ->
+            (entries + formatted).takeLast(200)
         }
-        _diagnosticLogs.value = list
     }
 
     fun clearDiagnosticLogs() {
@@ -78,45 +120,90 @@ class ObdManager(
 
     // Conteo de comandos por segundo
     private var commandCounter = 0
-    private var lastRateCalculationTime = System.currentTimeMillis()
+    private var lastRateCalculationTime = System.nanoTime()
 
     init {
         val initialPids = mutableListOf<ObdPid>()
         initialPids.addAll(DefaultPids.getStandardPids())
-        initialPids.addAll(DefaultPids.getHondaIdtecPids())
+        // Las fórmulas propietarias del CSV requieren selección explícita para la ECU concreta.
+        initialPids.addAll(DefaultPids.getHondaIdtecPids().map { it.copy(isEnabled = false) })
         _activePids.value = initialPids
 
-        startSimulation()
     }
 
     fun updateProfile(newProfile: VehicleProfile) {
-        _vehicleProfile.value = newProfile
-        // Recalcular métricas dependientes del perfil
-        recalculateVehicleDerivedMetrics()
+        resetDiagnostics()
+        synchronized(telemetryLock) {
+            alertEvaluator.reset()
+            _vehicleProfile.value = newProfile
+            _vehicleState.value = VehicleState()
+            evaluateAlerts()
+        }
+        _connectionState.update {
+            it.copy(customInitCommands = parseInitCommands(newProfile.customInitCommands))
+        }
     }
 
     fun setPids(pids: List<ObdPid>) {
-        _activePids.value = pids
+        val previous = _activePids.value.associateBy { it.id }
+        _activePids.value = pids.filterNot { it.cleanObdCommand().startsWith("CALC_") }.distinctBy { it.id }
+        val retainedIds = _activePids.value.filter { previous[it.id]?.isEnabled == it.isEnabled }.map { it.id }.toSet()
+        _vehicleState.update { it.copy(sensorStatuses = it.sensorStatuses.filterKeys { id -> id in retainedIds }) }
+        invalidateReadings(_vehicleState.value.readings.filterValues { reading ->
+            _activePids.value.none { pid ->
+                pid.id == reading.pidId && pid.isEnabled && pid.isSupported &&
+                    previous[pid.id]?.copy(isEnabled = true, isSupported = true, supportChecked = false) ==
+                    pid.copy(isEnabled = true, isSupported = true, supportChecked = false)
+            }
+        }.keys)
+        synchronized(telemetryLock) { evaluateAlerts() }
+    }
+
+    fun setSensorAlertRules(rules: List<SensorAlertRule>) {
+        require(rules.all { it.validationError() == null })
+        synchronized(telemetryLock) {
+            alertRules.value = rules.toList()
+            evaluateAlerts()
+        }
+    }
+
+    // Se llama bajo telemetryLock, también al invalidar o pausar los datos.
+    private fun evaluateAlerts() {
+        _sensorAlerts.value = alertEvaluator.evaluate(
+            alertRules.value.filter { it.vehicleId == _vehicleProfile.value.id },
+            _activePids.value, _vehicleState.value, _connectionState.value)
+    }
+
+    fun setVisibleSensors(pidIds: Set<String>) {
+        pollingSelection.update { it.first to pidIds.toSet() }
+    }
+
+    fun setPollingMode(mode: PollingMode) {
+        pollingSelection.update { mode to it.second }
     }
 
     fun addPids(newPids: List<ObdPid>) {
         val current = _activePids.value.toMutableList()
-        for (p in newPids) {
-            val existingIdx = current.indexOfFirst { it.cleanObdCommand() == p.cleanObdCommand() && it.name == p.name }
+        for (p in newPids.filterNot { it.cleanObdCommand().startsWith("CALC_") }) {
+            val existingIdx = current.indexOfFirst { it.id == p.id || (it.cleanObdCommand() == p.cleanObdCommand() &&
+                it.header.replace(" ", "").uppercase() == p.header.replace(" ", "").uppercase() &&
+                it.name == p.name && it.shortName == p.shortName && it.equation == p.equation && it.units == p.units) }
             if (existingIdx >= 0) {
-                current[existingIdx] = p
+                val existing = current[existingIdx]
+                current[existingIdx] = p.copy(id = existing.id, isEnabled = existing.isEnabled,
+                    isSupported = existing.isSupported, supportChecked = existing.supportChecked)
             } else {
                 current.add(p)
             }
         }
-        _activePids.value = current
+        setPids(current)
     }
 
     fun togglePid(pidId: String, isEnabled: Boolean) {
         val updated = _activePids.value.map {
             if (it.id == pidId) it.copy(isEnabled = isEnabled) else it
         }
-        _activePids.value = updated
+        setPids(updated)
     }
 
     fun setManualThrottle(percent: Float?) {
@@ -127,355 +214,598 @@ class ObdManager(
      * Escanea activamente la ECU del coche para identificar qué PIDs están soportados
      * mediante las tramas 0100, 0120, etc.
      */
-    suspend fun scanSupportedPids(): Map<String, Boolean> {
+    suspend fun scanSupportedPids(includeExtended: Boolean = true): Map<String, Boolean> {
+        return try {
+            commandSequenceMutex.withLock { scanSupportedPidsInternal(includeExtended) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logDiagnostic("❌ Escaneo interrumpido: ${e.message}")
+            if (!connection.isConnected()) {
+                triggerAutoReconnect("Enlace perdido durante el escaneo")
+            }
+            emptyMap()
+        }
+    }
+
+    private fun parseInitCommands(value: String): List<String> =
+        value.replace("\\n", "\n").lines().map { it.trim() }.filter { it.isNotEmpty() }
+
+    private fun initialHeader(): String = _connectionState.value.customInitCommands
+        .map { it.replace(" ", "").uppercase() }
+        .lastOrNull { it.startsWith("ATSH") }?.removePrefix("ATSH") ?: ""
+
+    private suspend fun configureAdapter(command: String) {
+        val raw = connection.sendCommand(command)
+        val response = Elm327Protocol.cleanResponse(raw).replace(" ", "").uppercase()
+            .removePrefix(command.replace(" ", "").uppercase())
+        if (response != "OK") throw java.io.IOException("El adaptador rechazó $command: ${raw.trim()}")
+    }
+
+    private suspend fun selectHeader(header: String) {
+        if (header == adapterHeader) return
+        if (header.isBlank()) {
+            // AT D restaura la cabecera automática sin asumir un protocolo CAN concreto.
+            // Reaplicar el formato y la inicialización del perfil porque AT D también los restablece.
+            adapterHeader = "?"
+            for (command in listOf("AT D", "AT E0", "AT L0", "AT S0", "AT H0", "AT AT1", "AT SP0") +
+                _connectionState.value.customInitCommands) configureAdapter(command)
+        } else {
+            configureAdapter("AT SH $header")
+        }
+        adapterHeader = header
+    }
+
+    private suspend fun scanSupportedPidsInternal(includeExtended: Boolean): Map<String, Boolean> {
         val supportedHexPids = mutableSetOf<String>()
-        val extendedResults = mutableMapOf<String, Boolean>()
+        val checkedStandardPids = mutableSetOf<String>()
+        val extendedResults = mutableMapOf<String, Boolean>() // Por sensor/ECU, no solo por comando.
 
         if (!connection.isConnected()) return emptyMap()
 
-        // 1. Escanear PIDs estándar 0100 y 0120
-        val resp0100 = connection.sendCommand("0100")
-        supportedHexPids.addAll(SupportedPidsDetector.parseSupportedPidsRange("0100", resp0100))
-
-        if (supportedHexPids.contains("20")) {
-            val resp0120 = connection.sendCommand("0120")
-            supportedHexPids.addAll(SupportedPidsDetector.parseSupportedPidsRange("0120", resp0120))
+        // Solo mapas de soporte al conectar: no consultar toda la biblioteca extendida.
+        val scanHeader = initialHeader()
+        selectHeader(scanHeader)
+        for (base in 0..0xE0 step 0x20) {
+            val command = "01%02X".format(base)
+            val response = connection.sendCommand(command)
+            if (Elm327Protocol.extractDataBytes(command, response).size < 4) break
+            checkedStandardPids.addAll((base + 1..minOf(base + 0x20, 0xFF)).map { "%02X".format(it) })
+            val supported = SupportedPidsDetector.parseSupportedPidsRange(command, response)
+            supportedHexPids.addAll(supported)
+            if ("%02X".format(base + 0x20) !in supported) {
+                checkedStandardPids.addAll((base + 0x21..0xFF).map { "%02X".format(it) })
+                break
+            }
         }
 
-        // 2. Comprobar PIDs extendidos Modo 22
-        val mode22Pids = _activePids.value.filter { it.cleanObdCommand().startsWith("22") }
-        for (p in mode22Pids) {
-            val resp = connection.sendCommand(p.cleanObdCommand())
-            val ok = !SupportedPidsDetector.isResponseUnsupported(resp)
-            extendedResults[p.cleanObdCommand()] = ok
+        // El escaneo completo sigue disponible cuando se solicita expresamente.
+        if (includeExtended) {
+            val requests = ObdPollingPolicy.requests(_activePids.value.map { it.copy(isEnabled = true) },
+                hideUnsupported = false, initialHeader = initialHeader())
+            for (request in requests.filter { it.command.startsWith("22") }) {
+                selectHeader(request.header)
+                val response = connection.sendCommand(request.command)
+                val bytes = Elm327Protocol.extractDataBytes(request.command, response)
+                val variables = EquationEvaluator.mapBytesToVariables(bytes)
+                val failure = SupportedPidsDetector.responseFailure(request.command, response)
+                request.pids.forEach { pid ->
+                    when {
+                        failure == SensorTelemetryStatus.INCOMPATIBLE -> {
+                            extendedResults[pid.id] = false
+                            invalidateReadings(setOf(pid.id), failure)
+                        }
+                        bytes.isNotEmpty() -> {
+                            // Positive response proves command support, not validity of every field.
+                            extendedResults[pid.id] = true
+                            try { PidDecoder.decode(pid, variables) }
+                            catch (e: Exception) { invalidateReadings(setOf(pid.id),
+                                if (e is PidFieldUnavailableException) SensorTelemetryStatus.FIELD_UNAVAILABLE else SensorTelemetryStatus.INVALID_RESPONSE) }
+                        }
+                        else -> invalidateReadings(setOf(pid.id), failure ?: SensorTelemetryStatus.INVALID_RESPONSE)
+                    }
+                }
+            }
         }
 
         // 3. Actualizar la lista en memoria
-        _activePids.value = SupportedPidsDetector.updatePidsSupport(
-            _activePids.value,
-            supportedHexPids,
-            extendedResults
-        )
+        _activePids.update { current ->
+            val previous = current.associateBy { it.id }
+            SupportedPidsDetector.updatePidsSupport(current, supportedHexPids, emptyMap(), checkedStandardPids).map { pid ->
+                if (pid.cleanObdCommand().startsWith("22")) {
+                    pid.copy(isSupported = extendedResults[pid.id] ?: previous.getValue(pid.id).isSupported,
+                        supportChecked = pid.id in extendedResults || previous.getValue(pid.id).supportChecked)
+                } else if (pid.header.isNotBlank() && pid.header.replace(" ", "").uppercase() != scanHeader) {
+                    previous.getValue(pid.id)
+                } else pid
+            }
+        }
 
-        return _activePids.value.associate { it.name to it.isSupported }
+        invalidateReadings(_vehicleState.value.readings.filterValues { reading ->
+            _activePids.value.none { it.id == reading.pidId && it.isEnabled && it.isSupported }
+        }.keys)
+        return _activePids.value.associate { it.id to it.isSupported }
+    }
+
+    fun pausePolling() {
+        pollingPaused = true
+        stopPolling()
+    }
+
+    fun resumePolling() {
+        pollingPaused = false
+        _vehicleState.update { it.copy(sensorStatuses = it.sensorStatuses.filterValues { status -> status != SensorTelemetryStatus.PAUSED }) }
+        if (isManuallyDisconnected) return
+        if (connection.isConnected() && pollingJob == null) {
+            startPolling()
+        } else if (!connection.isConnected()) {
+            triggerAutoReconnect("Reanudando conexión automática")
+        }
     }
 
     fun startSimulation() {
-        stopPolling()
-        scope.launch {
-            connection.disconnect()
-            val sim = SimulatedObdConnection()
-            connection = sim
-            _connectionState.value = _connectionState.value.copy(
+        isManuallyDisconnected = false
+        replaceConnectionJob {
+            _connectionState.value = ConnectionState(
                 type = ConnectionType.SIMULATION,
                 activeDevice = DeviceItem("Simulador Honda i-DTEC", "local"),
                 status = ConnectionStatus.CONNECTING,
-                statusMessage = "Iniciando simulación..."
+                statusMessage = "Iniciando simulación...",
+                customInitCommands = _connectionState.value.customInitCommands
             )
-            val ok = sim.connect()
-            if (ok) {
-                _connectionState.value = _connectionState.value.copy(
-                    status = ConnectionStatus.CONNECTED,
-                    statusMessage = "Simulación activa (100% interactiva)"
-                )
+            connection = connectionFactory?.invoke(_connectionState.value) ?: SimulatedObdConnection()
+            if (connection.connect()) {
+                _connectionState.update { it.copy(status = ConnectionStatus.CONNECTED, statusMessage = "Simulación activa") }
                 startPolling()
             }
         }
     }
 
     fun connectBluetooth(device: DeviceItem) {
-        stopPolling()
-        scope.launch {
-            logDiagnostic("🔌 Solicitando conexión Bluetooth a ${device.name} [${device.address}]...")
-            connection.disconnect()
-            val bt = BluetoothObdConnection(
-                deviceAddress = device.address,
-                customInitCommands = _connectionState.value.customInitCommands,
-                onLog = { logDiagnostic(it) }
-            )
-            connection = bt
-            _connectionState.value = _connectionState.value.copy(
-                type = ConnectionType.BLUETOOTH,
-                activeDevice = device,
-                status = ConnectionStatus.CONNECTING,
-                statusMessage = "Conectando a ${device.name}..."
-            )
-            val ok = bt.connect()
-            if (ok) {
-                _connectionState.value = _connectionState.value.copy(
-                    status = ConnectionStatus.CONNECTED,
-                    statusMessage = "Conectado a ${device.name}"
-                )
-                logDiagnostic("🔍 Realizando escaneo inicial de PIDs soportados...")
-                scanSupportedPids()
-                startPolling()
-            } else {
-                val err = bt.statusMessage.value
-                _connectionState.value = _connectionState.value.copy(
-                    status = ConnectionStatus.ERROR,
-                    statusMessage = err
-                )
-                logDiagnostic("❌ Falló la conexión con ${device.name}: $err")
-            }
-        }
+        connectReal(_connectionState.value.copy(type = ConnectionType.BLUETOOTH, activeDevice = device))
     }
 
     fun connectWifi(host: String, port: Int) {
-        stopPolling()
-        scope.launch {
-            connection.disconnect()
-            val wifi = WifiObdConnection(host, port, _connectionState.value.customInitCommands)
-            connection = wifi
-            _connectionState.value = _connectionState.value.copy(
-                type = ConnectionType.WIFI,
-                activeDevice = DeviceItem("WiFi ELM327", "$host:$port"),
-                status = ConnectionStatus.CONNECTING,
-                statusMessage = "Conectando a $host:$port..."
+        if (host.isBlank() || port !in 1..65535) {
+            logDiagnostic("Indica una IP y un puerto WiFi válido (1–65535).")
+            return
+        }
+        connectReal(_connectionState.value.copy(
+            type = ConnectionType.WIFI, wifiHost = host.trim(), wifiPort = port,
+            activeDevice = DeviceItem("WiFi ELM327", "${host.trim()}:$port")
+        ))
+    }
+
+    private fun connectReal(target: ConnectionState) {
+        isManuallyDisconnected = false
+        replaceConnectionJob {
+            _connectionState.value = target.copy(
+                status = ConnectionStatus.CONNECTING, commandsPerSecond = 0f,
+                statusMessage = "Conectando a ${target.activeDevice?.name}..."
             )
-            val ok = wifi.connect()
-            if (ok) {
-                _connectionState.value = _connectionState.value.copy(
-                    status = ConnectionStatus.CONNECTED,
-                    statusMessage = "Conectado vía WiFi"
-                )
-                scanSupportedPids()
-                startPolling()
-            } else {
-                _connectionState.value = _connectionState.value.copy(
-                    status = ConnectionStatus.ERROR,
-                    statusMessage = "Fallo al conectar WiFi a $host:$port"
-                )
+            connectUntilAvailable()
+        }
+    }
+
+    // Cada selección sustituye el intento anterior y espera su cierre antes de abrir otro socket.
+    private fun replaceConnectionJob(action: suspend () -> Unit) {
+        val previousDtc = dtcJob
+        resetDiagnostics()
+        val previous = connectionJob
+        previous?.cancel()
+        val previousPolling = pollingJob
+        stopPolling()
+        connectionJob = scope.launch {
+            previous?.join()
+            previousPolling?.join()
+            previousDtc?.join()
+            sessionMutex.withLock {
+                connection.disconnect()
+                clearTelemetry()
+                try {
+                    action()
+                } catch (e: CancellationException) {
+                    withContext(NonCancellable) { connection.disconnect() }
+                    throw e
+                }
             }
         }
     }
 
-    fun disconnect() {
-        stopPolling()
-        scope.launch {
+    private fun clearTelemetry() {
+        _vehicleState.value = VehicleState()
+        adapterHeader = ""
+        // El soporte pertenece a la ECU de esta sesión. Los PIDs extendidos
+        // se probarán al necesitarse, aunque otra sesión devolviese NO DATA.
+        _activePids.update { pids -> pids.map { it.copy(isSupported = true, supportChecked = false) } }
+        commandCounter = 0
+        lastRateCalculationTime = System.nanoTime()
+        _connectionState.update { it.copy(commandsPerSecond = 0f) }
+    }
+
+    private suspend fun connectUntilAvailable() {
+        var attempt = 0
+        while (currentCoroutineContext().isActive && !isManuallyDisconnected) {
+            val target = _connectionState.value
+            if (!canConnect(target.type)) {
+                _connectionState.update { it.copy(
+                    status = ConnectionStatus.RECONNECTING,
+                    statusMessage = "Esperando Bluetooth, permisos o fin de búsqueda para conectar a ${target.activeDevice?.name}"
+                ) }
+                delay(2000)
+                continue
+            }
+            attempt++
+            _connectionState.update { it.copy(
+                status = if (attempt == 1) ConnectionStatus.CONNECTING else ConnectionStatus.RECONNECTING,
+                statusMessage = "Conectando a ${target.activeDevice?.name} (intento $attempt)..."
+            ) }
+            connection = connectionFactory?.invoke(target) ?: when (target.type) {
+                ConnectionType.BLUETOOTH -> BluetoothObdConnection(
+                    target.activeDevice!!.address, target.customInitCommands, ::logDiagnostic
+                )
+                ConnectionType.WIFI -> WifiObdConnection(target.wifiHost, target.wifiPort, target.customInitCommands, ::logDiagnostic)
+                ConnectionType.SIMULATION -> return
+            }
+            val connected = try {
+                connection.connect()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logDiagnostic("Error de conexión: ${e.message}")
+                false
+            }
+            currentCoroutineContext().ensureActive()
+            if (connected) {
+                _connectionState.update { it.copy(status = ConnectionStatus.CONNECTED, statusMessage = "Conectado a ${target.activeDevice?.name}") }
+                onRealConnectionEstablished(_connectionState.value)
+                scanSupportedPids(includeExtended = pollingSelection.value.first == PollingMode.ALL)
+                if (connection.isConnected()) {
+                    startPolling()
+                    return
+                }
+            }
+            val error = connection.statusMessage.value
             connection.disconnect()
-            _connectionState.value = _connectionState.value.copy(
-                status = ConnectionStatus.DISCONNECTED,
-                statusMessage = "Desconectado"
-            )
+            val retryMillis = retryDelayMillis(attempt.toLong())
+            val delaySeconds = retryMillis / 1000
+            _connectionState.update { it.copy(
+                status = ConnectionStatus.RECONNECTING,
+                statusMessage = "$error. Reintentando en ${delaySeconds}s...", commandsPerSecond = 0f
+            ) }
+            logDiagnostic("Reconexión a ${target.activeDevice?.name}: intento $attempt; nuevo intento en ${delaySeconds}s.")
+            delay(retryMillis)
+        }
+    }
+
+    fun disconnect(message: String = "Desconectado manualmente. Selecciona un adaptador para volver a conectar.") {
+        isManuallyDisconnected = true
+        replaceConnectionJob {
+            _connectionState.update { it.copy(
+                type = if (it.type == ConnectionType.SIMULATION) ConnectionType.BLUETOOTH else it.type,
+                status = ConnectionStatus.DISCONNECTED, activeDevice = null,
+                statusMessage = message
+            ) }
+        }
+    }
+
+    fun close() {
+        isManuallyDisconnected = true
+        val previousDtc = dtcJob
+        resetDiagnostics()
+        val previous = connectionJob
+        previous?.cancel()
+        stopPolling()
+        scope.launch(NonCancellable) {
+            previous?.join()
+            previousDtc?.join()
+            sessionMutex.withLock { connection.disconnect() }
+        }
+    }
+
+    private fun resetDiagnostics() {
+        diagnosticGeneration.incrementAndGet()
+        dtcJob?.cancel()
+        _dtcState.value = DtcDiagnosticState()
+    }
+
+    fun cancelDiagnostics() { dtcJob?.cancel() }
+    fun readTroubleCodes() { launchDiagnostics(null, false) }
+    fun clearTroubleCodes(expectedSession: Long, engineStoppedConfirmed: Boolean) {
+        if (!engineStoppedConfirmed || _dtcState.value.report?.session != expectedSession || expectedSession != diagnosticSession) {
+            _dtcState.update { it.copy(error = "El borrado necesita confirmación y una lectura de esta conexión.") }
+            return
+        }
+        launchDiagnostics(expectedSession, true)
+    }
+
+    private fun launchDiagnostics(expectedSession: Long?, clear: Boolean) {
+        if (_dtcState.value.busy) return
+        if (!connection.isConnected() || _connectionState.value.status != ConnectionStatus.CONNECTED) {
+            _dtcState.update { it.copy(error = "Conecta el adaptador antes de consultar averías.") }; return
+        }
+        val epoch = diagnosticSession
+        val link = connection
+        val vehicle = _vehicleProfile.value
+        val simulated = _connectionState.value.type == ConnectionType.SIMULATION
+        val adapter = _connectionState.value.activeDevice?.name ?: "ELM327"
+        _dtcState.update { it.copy(busy = true, progress = "Preparando diagnóstico", error = null, clearResult = null) }
+        dtcJob = scope.launch(ioDispatcher) {
+            try {
+                commandSequenceMutex.withLock {
+                    currentCoroutineContext().ensureActive()
+                    check(epoch == diagnosticSession && link === connection && link.isConnected()) { "La conexión cambió" }
+                    try {
+                        // Dirección funcional estándar: consultar todas las ECU OBD de emisiones.
+                        // AT D elimina filtros/cabeceras dejados por sensores o por el terminal.
+                        for (cmd in listOf("AT D", "AT E0", "AT L0", "AT S1", "AT H1", "AT AT1", "AT SP0")) configureAdapter(cmd)
+                        link.sendCommand("0100") // Selección automática del protocolo antes de AT DPN.
+                        val protocol = Elm327Protocol.cleanResponse(link.sendCommand("AT DPN"))
+                            .replace(" ", "").uppercase().removePrefix("ATDPN").removePrefix("A").toIntOrNull(16)
+                        val can = protocol?.let { it in 6..9 }
+                        if (can == true) configureAdapter("AT CAF1")
+                        val reader = DtcDiagnosticReader({ cmd ->
+                            currentCoroutineContext().ensureActive()
+                            check(epoch == diagnosticSession && link === connection) { "La conexión cambió" }
+                            link.sendCommand(cmd)
+                        }, can) { text -> if (epoch == diagnosticSession) _dtcState.update { it.copy(progress = text) } }
+                        if (clear) {
+                            check(expectedSession == epoch) { "Informe de otra conexión" }
+                            if (!simulated) {
+                                val rpm = DiagnosticResponseParser.parse("010C", link.sendCommand("010C"), can)
+                                    .frames.mapNotNull { DiagnosticResponseParser.pidData(it, 1, 12) }
+                                    .filter { it.size >= 2 }.map { (it[0] * 256 + it[1]) / 4.0 }
+                                check(rpm.none { it > 0 }) { "Motor en marcha: apágalo y deja el contacto encendido antes de borrar." }
+                            }
+                            val result = reader.clear()
+                            if (epoch == diagnosticSession) _dtcState.update { it.copy(clearResult = result) }
+                            // Releer incluso si la ECU no confirma: un timeout no prueba que el borrado fallase.
+                        }
+                        val report = reader.read(vehicle, adapter, simulated, epoch)
+                        if (epoch == diagnosticSession) _dtcState.update { it.copy(report = report) }
+                    } finally {
+                        withContext(NonCancellable) {
+                            if (link === connection && link.isConnected()) {
+                                try {
+                                    for (cmd in listOf("AT D", "AT E0", "AT L0", "AT S0", "AT H0", "AT AT1", "AT SP0") +
+                                        _connectionState.value.customInitCommands + listOf("AT E0", "AT L0", "AT S0", "AT H0")) configureAdapter(cmd)
+                                    adapterHeader = initialHeader()
+                                } catch (e: Exception) {
+                                    adapterHeader = "?"
+                                    link.disconnect()
+                                    logDiagnostic("No se pudo restaurar el adaptador tras el diagnóstico: ${e.message}")
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e: CancellationException) {
+                if (epoch == diagnosticSession) _dtcState.update { it.copy(error = if (clear) "Consulta cancelada. La captura puede ser anterior al borrado; vuelve a leer las averías." else "Consulta cancelada; se conserva la última captura.") }
+                throw e
+            } catch (e: Exception) {
+                if (epoch == diagnosticSession) _dtcState.update { it.copy(error = e.message ?: "Falló el diagnóstico") }
+                logDiagnostic("Diagnóstico DTC: ${e.message}")
+            } finally {
+                if (epoch == diagnosticSession) {
+                    _dtcState.update { it.copy(busy = false, progress = "") }
+                    if (!link.isConnected()) triggerAutoReconnect("Enlace perdido durante diagnóstico")
+                }
+            }
         }
     }
 
     suspend fun sendManualCommand(command: String): String {
-        return connection.sendCommand(command)
+        if (!connection.isConnected()) return "ERROR: NOT CONNECTED"
+        return try {
+            commandSequenceMutex.withLock {
+                val response = connection.sendCommand(command)
+                // Un comando de terminal puede cambiar/restablecer la cabecera.
+                adapterHeader = "?"
+                response
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (!connection.isConnected()) triggerAutoReconnect("Enlace perdido desde terminal")
+            logDiagnostic("❌ Falló $command: ${e.message}")
+            "ERROR: ${e.message}"
+        }
     }
 
     private fun startPolling() {
+        if (pollingPaused || !connection.isConnected()) return
         pollingJob?.cancel()
-        pollingJob = scope.launch(Dispatchers.IO) {
-            var currentHeader = ""
+        freshnessJob?.cancel()
+        freshnessJob = scope.launch(ioDispatcher) {
+            while (isActive) {
+                delay(250)
+                expireReadings()
+            }
+        }
+        pollingJob = scope.launch(ioDispatcher) {
+            commandCounter = 0
+            lastRateCalculationTime = System.nanoTime()
+            val backgroundBudget = BackgroundPollingBudget()
+            val retryAfter = mutableMapOf<Pair<String, String>, Long>()
 
             while (isActive && connection.isConnected()) {
-                val profile = _vehicleProfile.value
-                // Filtrar según PIDs habilitados y si se ocultan los no soportados
-                val enabledPids = _activePids.value.filter { pid ->
-                    pid.isEnabled && (!profile.hideUnsupportedSensors || pid.isSupported)
+                val selection = pollingSelection.value
+                val recording = recordingActive.value
+                val backgroundReadingActive = backgroundReading.value
+                val mode = selection.first
+                val watched = alertRules.value.filter { it.enabled && it.vehicleId == _vehicleProfile.value.id }
+                    .map { it.pidId }.toSet()
+                val wanted = ObdPollingPolicy.withDependencies(selection.second + watched)
+                val requests = ObdPollingPolicy.requests(_activePids.value,
+                    _vehicleProfile.value.hideUnsupportedSensors, initialHeader())
+                val foreground = requests.filter { request ->
+                    recording || backgroundReadingActive || mode == PollingMode.ALL || request.pids.any { it.id in wanted }
+                }
+                val background = if (mode == PollingMode.BALANCED) {
+                    backgroundBudget.next(requests.filter { request ->
+                        request !in foreground && request.pids.any { it.id in ObdPollingPolicy.backgroundSensors }
+                    }, System.nanoTime() / 1_000_000)
+                } else null
+                val selected = (foreground + listOfNotNull(background)).filter { request ->
+                    System.nanoTime() >= (retryAfter[request.header to request.command] ?: 0L)
                 }
 
-                if (enabledPids.isEmpty()) {
-                    delay(200)
+                if (selected.isEmpty()) {
+                    if (mode != PollingMode.BALANCED) {
+                        commandCounter = 0
+                        lastRateCalculationTime = System.nanoTime()
+                        _connectionState.update { it.copy(commandsPerSecond = 0f) }
+                    }
+                    delay(100)
                     continue
                 }
 
-                for (pid in enabledPids) {
-                    if (!isActive || !connection.isConnected()) break
-
+                for (request in selected) {
+                    if (!isActive || !connection.isConnected() || pollingSelection.value != selection || recordingActive.value != recording || backgroundReading.value != backgroundReadingActive) break
+                    yield()
                     try {
-                        if (pid.header.isNotBlank() && pid.header != currentHeader) {
-                            connection.sendCommand("AT SH ${pid.header}")
-                            currentHeader = pid.header
+                        val rawResponse = commandSequenceMutex.withLock {
+                            selectHeader(request.header)
+                            connection.sendCommand(request.command)
                         }
-
-                        val rawResponse = connection.sendCommand(pid.cleanObdCommand())
+                        currentCoroutineContext().ensureActive()
                         commandCounter++
-
-                        val now = System.currentTimeMillis()
-                        val diff = now - lastRateCalculationTime
+                        val now = System.nanoTime()
+                        val diff = (now - lastRateCalculationTime) / 1_000_000
                         if (diff >= 1000L) {
-                            val rate = (commandCounter * 1000f) / diff
-                            _connectionState.value = _connectionState.value.copy(commandsPerSecond = rate)
+                            _connectionState.update { it.copy(commandsPerSecond = (commandCounter * 1000f) / diff) }
                             commandCounter = 0
                             lastRateCalculationTime = now
                         }
-
-                        // Diagnóstico de respuestas erróneas de la ECU
-                        val diagError = Elm327Protocol.diagnoseResponseError(rawResponse)
-                        if (diagError != null) {
-                            logDiagnostic("⚠️ [${pid.shortName}] $diagError")
+                        Elm327Protocol.diagnoseResponseError(rawResponse)?.let {
+                            logDiagnostic("⚠️ [${request.pids.first().shortName}] $it")
                         }
-
-                        // Verificar si el PID responde "NO DATA" para marcarlo como no soportado
-                        if (SupportedPidsDetector.isResponseUnsupported(rawResponse)) {
-                            markPidUnsupported(pid.id)
+                        val failure = SupportedPidsDetector.responseFailure(request.command, rawResponse)
+                        if (failure != null) {
+                            val ids = request.pids.map { it.id }.toSet()
+                            if (failure == SensorTelemetryStatus.INCOMPATIBLE) {
+                                _activePids.update { pids -> pids.map { if (it.id in ids) it.copy(isSupported = false, supportChecked = true) else it } }
+                            }
+                            if (failure != SensorTelemetryStatus.INCOMPATIBLE) retryAfter[request.header to request.command] = System.nanoTime() + 1_000_000_000L
+                            invalidateReadings(ids, failure)
                             continue
                         }
-
-                        val dataBytes = Elm327Protocol.extractDataBytes(pid.cleanObdCommand(), rawResponse)
-                        if (dataBytes.isNotEmpty()) {
-                            val vars = EquationEvaluator.mapBytesToVariables(dataBytes)
-                            val evaluatedVal = EquationEvaluator.evaluate(pid.equation, vars).toFloat()
-
-                            processReading(pid, evaluatedVal)
+                        val bytes = Elm327Protocol.extractDataBytes(request.command, rawResponse)
+                        if (bytes.isNotEmpty()) {
+                            val variables = EquationEvaluator.mapBytesToVariables(bytes)
+                            // Actualizar también los sensores de la misma trama es gratis para el bus.
+                            for (pid in request.pids) {
+                                try {
+                                    processReading(pid, PidDecoder.decode(pid, variables))
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    invalidateReadings(setOf(pid.id), if (e is PidFieldUnavailableException)
+                                        SensorTelemetryStatus.FIELD_UNAVAILABLE else SensorTelemetryStatus.INVALID_RESPONSE)
+                                }
+                            }
+                        } else {
+                            retryAfter[request.header to request.command] = System.nanoTime() + 1_000_000_000L
+                            invalidateReadings(request.pids.map { it.id }.toSet(), SensorTelemetryStatus.INVALID_RESPONSE)
                         }
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         if (!connection.isConnected()) {
-                            _connectionState.value = _connectionState.value.copy(
-                                status = ConnectionStatus.ERROR,
-                                statusMessage = "Se perdió la comunicación con el adaptador OBD2"
-                            )
-                            logDiagnostic("❌ Conexión Bluetooth perdida: ${e.message ?: "Socket desconectado"}")
+                            logDiagnostic("❌ Enlace OBD2 perdido: ${e.message ?: "Socket cerrado"}")
+                            triggerAutoReconnect("Pérdida de enlace con el adaptador")
                             break
                         }
+                        retryAfter[request.header to request.command] = System.nanoTime() + 1_000_000_000L
+                        invalidateReadings(request.pids.map { it.id }.toSet(),
+                            if (e is java.io.IOException) SensorTelemetryStatus.NO_RESPONSE else SensorTelemetryStatus.INVALID_RESPONSE)
+                        logDiagnostic("❌ ${request.command}: ${e.message}")
+                    } finally {
+                        if (request == background) backgroundBudget.recordCompletion(System.nanoTime() / 1_000_000)
                     }
-                    delay(30)
                 }
+                // Solo el simulador necesita limitar su bucle de respuestas en memoria.
+                if (_connectionState.value.type == ConnectionType.SIMULATION) delay(20)
             }
+            if (isActive && !connection.isConnected()) triggerAutoReconnect("Enlace OBD perdido")
         }
     }
 
-    private fun markPidUnsupported(pidId: String) {
-        val updated = _activePids.value.map {
-            if (it.id == pidId) it.copy(isSupported = false) else it
+    private fun triggerAutoReconnect(reason: String) {
+        // El polling usa IO; las decisiones de conexión se serializan en el scope del gestor.
+        scope.launch {
+            val state = _connectionState.value
+            if (isManuallyDisconnected || state.type == ConnectionType.SIMULATION || state.activeDevice == null) return@launch
+            if (connectionJob?.isActive == true || connection.isConnected()) return@launch
+            logDiagnostic(reason)
+            replaceConnectionJob { connectUntilAvailable() }
         }
-        _activePids.value = updated
     }
 
     private fun stopPolling() {
         pollingJob?.cancel()
         pollingJob = null
+        freshnessJob?.cancel()
+        freshnessJob = null
+        synchronized(telemetryLock) {
+            _vehicleState.value = VehicleState(sensorStatuses =
+                if (pollingPaused) _activePids.value.associate { it.id to SensorTelemetryStatus.PAUSED } else emptyMap())
+            alertEvaluator.reset()
+            evaluateAlerts()
+        }
     }
 
-    private fun processReading(pid: ObdPid, value: Float) {
-        val currentReadings = _vehicleState.value.readings.toMutableMap()
+    private suspend fun processReading(pid: ObdPid, decodedValue: Double) {
+        val profile = _vehicleProfile.value
+        val source = _connectionState.value
+        val value = decodedValue.toFloat()
+        require(decodedValue.isFinite() && value.isFinite()) { "Lectura no finita" }
         val reading = ObdReading(
-            pidId = pid.id,
-            pidName = pid.name,
-            shortName = pid.shortName,
-            value = value,
-            units = pid.units,
-            minValue = pid.minValue,
-            maxValue = pid.maxValue
+            pidId = pid.id, pidName = pid.name, shortName = pid.shortName,
+            value = value, units = pid.units, minValue = pid.minValue, maxValue = pid.maxValue,
+            decodedValue = decodedValue, valueLabels = pid.valueLabels, isSimulated = _connectionState.value.type == ConnectionType.SIMULATION
         )
-        currentReadings[pid.shortName] = reading
-
-        val historyList = sparklineHistory.getOrPut(pid.shortName) { mutableListOf() }
-        historyList.add(value)
-        if (historyList.size > 40) {
-            historyList.removeAt(0)
+        _activePids.update { pids -> pids.map { if (it.id == pid.id) it.copy(isSupported = true, supportChecked = true) else it } }
+        val context = currentCoroutineContext()
+        var accepted = false
+        synchronized(telemetryLock) {
+            _vehicleState.update { state ->
+                if (!context.isActive || pollingPaused || _activePids.value.none {
+                    it.id == pid.id && it.isEnabled && it.isSupported
+                }) return@update state
+                val history = (state.sparklineHistory[pid.id].orEmpty() + value).takeLast(40)
+                state.copy(
+                    readings = state.readings + (pid.id to reading),
+                    sparklineHistory = state.sparklineHistory + (pid.id to history),
+                    sensorStatuses = state.sensorStatuses - pid.id
+                )
+            }
+            evaluateAlerts()
+            accepted = _vehicleState.value.readings[pid.id] === reading
         }
-
-        val currentState = _vehicleState.value
-        var updated = currentState.copy(
-            readings = currentReadings,
-            sparklineHistory = sparklineHistory.mapValues { it.value.toList() }
-        )
-
-        when (pid.shortName) {
-            "RPM" -> {
-                val estGear = when {
-                    updated.speedKmh < 5f -> 1
-                    value < 100f -> 1
-                    else -> {
-                        val ratio = updated.speedKmh / (value / 1000f)
-                        when {
-                            ratio < 11f -> 1
-                            ratio < 18f -> 2
-                            ratio < 26f -> 3
-                            ratio < 36f -> 4
-                            ratio < 46f -> 5
-                            else -> 6
-                        }
-                    }
-                }
-                updated = updated.copy(rpm = value, gearEstimated = estGear)
-            }
-            "Velocidad" -> updated = updated.copy(speedKmh = value)
-            "Temp Liq" -> updated = updated.copy(coolantTempC = value)
-            "Carga" -> updated = updated.copy(engineLoadPercent = value)
-            "Acelerador" -> updated = updated.copy(throttlePercent = value)
-            "MAP" -> {
-                val boost = (value / 100f - 1.0f + _vehicleProfile.value.boostPressureAdjustmentBar).coerceAtLeast(0f)
-                updated = updated.copy(boostPressureBar = boost)
-            }
-            "Temp Adm" -> updated = updated.copy(intakeAirTempC = value)
-            "MAF" -> updated = updated.copy(mafFlowGramsSec = value)
-            "Nivel Dep" -> updated = updated.copy(fuelLevelPercent = value)
-            "Voltaje" -> updated = updated.copy(batteryVoltage = value)
-            "Consumo" -> updated = updated.copy(fuelRateLh = value)
-
-            // DPF Honda i-DTEC
-            "DPF dist a/reg" -> updated = updated.copy(dpfDistanceLastRegenKm = value)
-            "DPF fuel a/reg" -> updated = updated.copy(dpfFuelLastRegenL = value)
-            "DPF time a/reg" -> updated = updated.copy(dpfTimeLastRegenSec = value)
-            "DPF diff.pres" -> {
-                val warn = value > 25.0f
-                updated = updated.copy(dpfDifferentialPressureKpa = value, dpfWarningLight = warn)
-            }
-            "EGT" -> updated = updated.copy(exhaustGasTemp1C = value)
-            "DPF calc PM" -> {
-                val warn = value > 30.0f
-                updated = updated.copy(dpfCalculatedPmGrams = value, dpfWarningLight = warn || updated.dpfWarningLight)
-            }
-            "DPF reg.state" -> updated = updated.copy(dpfRegenStatus = value.toLong())
-            "DPF active reg" -> updated = updated.copy(dpfActiveRegen = value > 0f)
-            "Eng.oil lvl f" -> {
-                val warn = value > 115f || value < 80f
-                updated = updated.copy(engineOilLevelMm = value, oilWarningLight = warn)
-            }
-            "DPF calc.flow" -> updated = updated.copy(dpfExhaustFlowM3h = value)
-        }
-
-        _vehicleState.value = updated
-        recalculateVehicleDerivedMetrics()
+        if (accepted) onReading(reading, pid, profile, source)
     }
 
-    /**
-     * Aplica los modelos matemáticos de Torque Pro para calcular la potencia, par,
-     * combustible restante y autonomía basados en el perfil del vehículo.
-     */
-    private fun recalculateVehicleDerivedMetrics() {
-        val s = _vehicleState.value
-        val p = _vehicleProfile.value
-
-        // 1. Litros de combustible restantes en el depósito
-        val remainingLiters = p.fuelTankCapacityLiters * (s.fuelLevelPercent / 100f)
-
-        // 2. Consumo en L/100km (si no se lee por PID directo)
-        val l100km = if (s.speedKmh > 5f && s.fuelRateLh > 0.1f) {
-            (s.fuelRateLh / s.speedKmh) * 100f
-        } else if (s.fuelConsumptionL100km > 0.1f) {
-            s.fuelConsumptionL100km
-        } else {
-            5.8f // Consumo medio de referencia para 2.2 i-DTEC
+    private fun invalidateReadings(ids: Set<String>, reason: SensorTelemetryStatus = SensorTelemetryStatus.WAITING) {
+        if (ids.isEmpty()) return
+        synchronized(telemetryLock) {
+            _vehicleState.update { it.copy(readings = it.readings - ids, sparklineHistory = it.sparklineHistory - ids,
+                sensorStatuses = it.sensorStatuses + ids.associateWith { reason }) }
+            evaluateAlerts()
         }
+    }
 
-        // 3. Autonomía estimada restante en km
-        val rangeKm = if (l100km > 0.5f) {
-            (remainingLiters / l100km) * 100f
-        } else 600f
-
-        // 4. Potencia estimada (CV / HP)
-        // Fórmula Speed-Density / Carga / MAF:
-        // Potencia = (Carga% / 100) * (Cilindrada en L) * (RPM / 1000) * Factor según combustible y turbo
-        val boostFactor = 1.0f + (s.boostPressureBar * 0.8f)
-        val fuelEfficiencyFactor = if (p.fuelType == com.torqueobd2.dash.data.model.FuelType.DIESEL) 16.5f else 14.0f
-        val estHp = ((s.engineLoadPercent / 100f) * p.engineDisplacementLiters * (s.rpm / 1000f) * fuelEfficiencyFactor * boostFactor * (p.volumetricEfficiencyPercent / 100f)).coerceAtLeast(0f)
-
-        // 5. Par motor estimado (Nm) = (CV * 7024) / RPM
-        val estTorque = if (s.rpm > 200f) {
-            (estHp * 7024f) / s.rpm
-        } else 0f
-
-        _vehicleState.value = s.copy(
-            fuelRemainingLiters = remainingLiters,
-            estimatedRangeKm = rangeKm,
-            estimatedHorsepowerCv = estHp,
-            estimatedTorqueNm = estTorque,
-            fuelConsumptionL100km = l100km
-        )
+    private fun expireReadings() {
+        val now = System.nanoTime()
+        synchronized(telemetryLock) {
+            _vehicleState.update { state ->
+                val expired = state.readings.filterValues { now - it.receivedAtNanos >= readingTimeoutMillis * 1_000_000L }.keys
+                if (expired.isEmpty()) state else state.copy(
+                    readings = state.readings - expired, sparklineHistory = state.sparklineHistory - expired,
+                    sensorStatuses = state.sensorStatuses + expired.associateWith { SensorTelemetryStatus.STALE }
+                )
+            }
+            evaluateAlerts()
+        }
     }
 }

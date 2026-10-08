@@ -1,199 +1,94 @@
 package com.torqueobd2.dash.ui.components
 
-import androidx.compose.animation.core.animateFloatAsState
+import com.torqueobd2.dash.ui.automotive.uiLayoutScale
+import com.torqueobd2.dash.ui.automotive.CarText as Text
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.torqueobd2.dash.ui.theme.CardBackground
-import com.torqueobd2.dash.ui.theme.DangerRed
-import com.torqueobd2.dash.ui.theme.NeonGreen
-import com.torqueobd2.dash.ui.theme.RacingOrange
-import com.torqueobd2.dash.ui.theme.TextMuted
-import com.torqueobd2.dash.ui.theme.TextWhite
-import com.torqueobd2.dash.ui.theme.WarningAmber
+import com.torqueobd2.dash.ui.theme.*
+import com.torqueobd2.dash.data.model.telemetryText
 
-/**
- * Indicador de alto contraste estilo display HUD de carreras (GT3 / F1),
- * con barra de luces secuenciales de cambio de marcha (Shift Lights) y velocidad gigante.
- */
 @Composable
 fun DigitalHudGauge(
-    speedKmh: Float,
-    rpm: Float,
-    maxRpm: Float = 5500f,
-    currentGear: Int = 1,
-    modifier: Modifier = Modifier
+    speedKmh: Float, rpm: Float, maxRpm: Float = 5500f, modifier: Modifier = Modifier,
+    showShiftLights: Boolean = true, coolantTempC: Float = Float.NaN, batteryVoltage: Float = Float.NaN,
+    speedStatus: String = "Pendiente de consultar", rpmStatus: String = "Pendiente de consultar"
 ) {
-    val animatedRpm by animateFloatAsState(targetValue = rpm, label = "hudRpm")
-    val rpmFraction = (animatedRpm / maxRpm).coerceIn(0f, 1f)
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(CardBackground)
-            .border(1.dp, Color(0xFF28303D), RoundedCornerShape(16.dp))
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Tira de luces secuenciales de cambio (16 LEDs: 6 verdes, 5 amarillos, 5 rojos)
-        ShiftLightsBar(rpmFraction = rpmFraction)
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Indicador de Marcha (Gear)
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = "MARCHA",
-                    color = TextMuted,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Box(
-                    modifier = Modifier
-                        .size(54.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF222834))
-                        .border(1.5.dp, RacingOrange, RoundedCornerShape(8.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (speedKmh < 1f && rpm < 1000f) "N" else currentGear.toString(),
-                        color = RacingOrange,
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Black,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
+    BoxWithConstraints(modifier.racingPanel(12.dp).drawBehind {
+        if (showShiftLights) {
+            // Líneas de carrocería suaves: acento racing sin tapar la telemetría.
+            repeat(4) { index ->
+                val x = size.width * 0.64f + index * 22.dp.toPx()
+                drawLine(RacingOrange.copy(alpha = 0.035f), Offset(x, size.height),
+                    Offset(x + size.height * 0.5f, 0f), strokeWidth = 12.dp.toPx())
             }
-
-            // Velocímetro digital grande
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(
-                        text = speedKmh.toInt().toString(),
-                        color = TextWhite,
-                        fontSize = 68.sp,
-                        fontWeight = FontWeight.Black,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "KM/H",
-                        color = TextMuted,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
-                }
-            }
-
-            // Tacómetro digital
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = "MOTOR",
-                    color = TextMuted,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = animatedRpm.toInt().toString(),
-                    color = if (rpmFraction > 0.85f) DangerRed else TextWhite,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontFamily = FontFamily.Monospace
-                )
-                Text(
-                    text = "RPM",
-                    color = RacingOrange,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+            drawLine(RacingOrange, Offset(0f, 20.dp.toPx()), Offset(0f, size.height - 20.dp.toPx()), strokeWidth = 4.dp.toPx())
         }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Barra horizontal de progreso de RPM con zona roja
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(8.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(Color(0xFF222834))
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(rpmFraction)
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(
-                        when {
-                            rpmFraction > 0.85f -> DangerRed
-                            rpmFraction > 0.65f -> WarningAmber
-                            else -> NeonGreen
-                        }
-                    )
-            )
+    }.padding(horizontal = 16.dp, vertical = 12.dp)) {
+        val compact = maxHeight < 180.dp * uiLayoutScale()
+        val tight = maxWidth < 220.dp
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+            if (showShiftLights) ShiftLightsBar(rpm / maxRpm.coerceAtLeast(1000f))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("VELOCIDAD", color = if (showShiftLights) RacingOrange else TextMuted, fontSize = 10.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.SemiBold)
+                if (showShiftLights && !tight) Text("km/h", color = TextDim, fontSize = 10.sp)
+            }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                CompositionLocalProvider(LocalTextStyle provides LocalTextStyle.current.copy(fontStyle = FontStyle.Italic)) {
+                    FittedValue(speedKmh.telemetryText(), color = TextWhite, fontSize = if (compact) 56.sp else 88.sp,
+                        letterSpacing = (-3).sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+                }
+                if (!speedKmh.isFinite()) Text(speedStatus, color = TextMuted, fontSize = 10.sp,
+                    modifier = Modifier.weight(0.8f).padding(start = 8.dp))
+            }
+            if (showShiftLights) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    FittedValue(if (rpm.isFinite()) "${rpm.telemetryText()} RPM" else "RPM · $rpmStatus", color = RacingOrange, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                    FittedValue("${coolantTempC.telemetryText()} °C  /  ${batteryVoltage.telemetryText()} V", color = TextMuted,
+                        fontSize = 10.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
+                }
+                TelemetryTrack(rpm / maxRpm.coerceAtLeast(1000f), RacingOrange, Modifier.fillMaxWidth().height(3.dp))
+            } else {
+                Text("km/h", color = TextMuted, fontSize = 10.sp)
+            }
         }
     }
 }
 
 @Composable
-private fun ShiftLightsBar(rpmFraction: Float) {
-    val totalLeds = 14
-    val activeLeds = (rpmFraction * totalLeds).toInt().coerceIn(0, totalLeds)
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly
-    ) {
-        for (i in 0 until totalLeds) {
-            val isActive = i < activeLeds
-            val ledColor = when {
-                i >= 10 -> DangerRed
-                i >= 6 -> WarningAmber
-                else -> NeonGreen
+fun ShiftLightsBar(rpmFraction: Float, modifier: Modifier = Modifier, totalLeds: Int = 16) {
+    val fraction = if (rpmFraction.isFinite()) rpmFraction.coerceIn(0f, 1f) else 0f
+    val active = (fraction * totalLeds).toInt()
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        repeat(totalLeds) { index ->
+            val color = when { index >= totalLeds * 0.8f -> DangerRed; index >= totalLeds * 0.55f -> WarningAmber; else -> NeonGreen }
+            Canvas(Modifier.weight(1f).height(7.dp)) {
+                val segment = Path().apply {
+                    moveTo(size.width * 0.2f, 0f)
+                    lineTo(size.width, 0f)
+                    lineTo(size.width * 0.8f, size.height)
+                    lineTo(0f, size.height)
+                    close()
+                }
+                drawPath(segment, if (index < active) color else BorderDark.copy(alpha = 0.55f))
             }
-
-            Box(
-                modifier = Modifier
-                    .size(16.dp, 10.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(if (isActive) ledColor else Color(0xFF222834))
-                    .border(
-                        0.5.dp,
-                        if (isActive) ledColor.copy(alpha = 0.8f) else Color(0xFF323B4A),
-                        RoundedCornerShape(2.dp)
-                    )
-            )
         }
     }
 }

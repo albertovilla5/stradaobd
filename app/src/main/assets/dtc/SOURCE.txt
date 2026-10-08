@@ -1,0 +1,5 @@
+Generic descriptions from Wal33D/dtc-database (MIT).
+https://github.com/Wal33D/dtc-database
+Downloaded 2026-10-03.
+Source SQLite SHA-256: 099a4ffd60398112a0540b0bbc93a5929e05e7f4e6d4988ca2a50858af01b743
+Only GENERIC, en definitions are bundled; no manufacturer is inferred from the vehicle name.

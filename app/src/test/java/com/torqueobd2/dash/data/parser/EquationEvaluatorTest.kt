@@ -76,4 +76,26 @@ class EquationEvaluatorTest {
         val result = EquationEvaluator.evaluate("AS/2", vars)
         assertEquals(98.0, result, 0.001)
     }
+
+    @Test fun rejectsMissingBytesInsteadOfInventingZeros() {
+        for (equation in listOf("((A*256)+B)/4", "INT16(V:W)/10", "SIGNED(AS)")) {
+            org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+                EquationEvaluator.evaluate(equation, mapOf("A" to 1.0))
+            }
+        }
+    }
+
+    @Test fun rejectsInvalidEquationsAndZeroDenominators() {
+        for (equation in listOf("", "A+", "(A+1", "A+1)", "A@2", "A/0", "A%0", "UNKNOWN(A)", "10")) {
+            org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+                EquationEvaluator.evaluate(equation, mapOf("A" to 1.0))
+            }
+        }
+    }
+
+    @Test fun unaryMinusAndDecimalValuesDecodeCorrectly() {
+        assertEquals(-20.0, EquationEvaluator.evaluate("A*-2", mapOf("A" to 10.0)), 0.001)
+        assertEquals(5.0, EquationEvaluator.evaluate("A*.5", mapOf("A" to 10.0)), 0.001)
+        assertEquals(-1.0, EquationEvaluator.evaluate("SIGNED(A)", mapOf("A" to 255.0)), 0.001)
+    }
 }

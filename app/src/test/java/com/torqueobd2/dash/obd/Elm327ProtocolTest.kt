@@ -59,4 +59,23 @@ class Elm327ProtocolTest {
         val ok = Elm327Protocol.diagnoseResponseError("41 00 BE 3E B8 11\r\n>")
         assertNull(ok)
     }
+
+    @Test fun rejectsWrongPidNegativeResponseAndMalformedPayload() {
+        for (response in listOf("41 0D 50", "7F 01 12", "41 0C 1A F", "41 0C 1A ZZ", "010C", "OK", "STOPPED", "?")) {
+            assertArrayEquals(response, intArrayOf(), Elm327Protocol.extractDataBytes("010C", response))
+        }
+    }
+
+    @Test fun doesNotAppendAnotherEcuOrAnotherPidToTheFirstResponse() {
+        assertArrayEquals(intArrayOf(0x1A, 0xF8),
+            Elm327Protocol.extractDataBytes("010C", "010C\r41 0C 1A F8\r41 0C 00 00\r>"))
+        assertArrayEquals(intArrayOf(0x1A),
+            Elm327Protocol.extractDataBytes("010C", "41 0C 1A\r41 0D 50\r>"))
+    }
+
+    @Test fun rejectsMissingMultilineFramesAndUnknownCanHeaders() {
+        assertArrayEquals(intArrayOf(), Elm327Protocol.extractDataBytes("222512", "0: 62 25 12 01\r2: 02"))
+        assertArrayEquals(intArrayOf(), Elm327Protocol.extractDataBytes("010C", "7E8 04 41 0C 1A F8"))
+        assertArrayEquals(intArrayOf(1, 2, 3), Elm327Protocol.extractDataBytes("222512", "006\r0: 62 25 12 01\r1: 02 03"))
+    }
 }

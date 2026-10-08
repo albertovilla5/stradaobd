@@ -1,234 +1,103 @@
 package com.torqueobd2.dash.ui.components
 
+import com.torqueobd2.dash.ui.automotive.CarText as Text
+import com.torqueobd2.dash.ui.automotive.LocalCarMode
+import android.graphics.Paint
+import android.graphics.Typeface
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.torqueobd2.dash.ui.theme.CarbonBlack
-import com.torqueobd2.dash.ui.theme.DangerRed
-import com.torqueobd2.dash.ui.theme.GaugeRedline
-import com.torqueobd2.dash.ui.theme.NeonCyan
-import com.torqueobd2.dash.ui.theme.RacingOrange
-import com.torqueobd2.dash.ui.theme.TextMuted
-import com.torqueobd2.dash.ui.theme.TextWhite
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.min
-import kotlin.math.sin
+import com.torqueobd2.dash.ui.theme.*
+import java.util.Locale
+import kotlin.math.*
 
-/**
- * Medidor circular analógico autoescalable y adaptativo para cualquier resolución y pantalla.
- * Utiliza BoxWithConstraints para ajustar grosores, tamaños de aguja y tipografías proporcionalmente.
- */
 @Composable
 fun AnalogGauge(
-    value: Float,
-    minValue: Float = 0f,
-    maxValue: Float = 8000f,
-    title: String = "RPM",
-    unit: String = "RPM",
-    redlineStart: Float = 6000f,
-    majorTickStep: Float = 1000f,
-    primaryColor: Color = RacingOrange,
-    modifier: Modifier = Modifier
+    value: Float, minValue: Float = 0f, maxValue: Float = 8000f,
+    title: String = "RPM", unit: String = "RPM", redlineStart: Float = 6000f,
+    majorTickStep: Float = 1000f, primaryColor: Color = RacingOrange, modifier: Modifier = Modifier,
+    formattedValue: String? = null
 ) {
-    val animatedValue by animateFloatAsState(
-        targetValue = value.coerceIn(minValue, maxValue),
-        animationSpec = spring(dampingRatio = 0.75f, stiffness = 300f),
-        label = "gaugeNeedle"
-    )
-
-    val startAngle = 135f
-    val sweepAngle = 270f
-    val progress = ((animatedValue - minValue) / (maxValue - minValue)).coerceIn(0f, 1f)
-    val needleAngleDeg = startAngle + (progress * sweepAngle)
-
-    BoxWithConstraints(
-        modifier = modifier.aspectRatio(1f),
-        contentAlignment = Alignment.Center
-    ) {
-        val sizeDp = min(maxWidth.value, maxHeight.value)
-        // Escalar tipografías proporcionalmente a la resolución / tamaño disponible
-        val scale = (sizeDp / 180f).coerceIn(0.6f, 2.2f)
-        val titleFontSize = (10f * scale).sp
-        val valueFontSize = (20f * scale).sp
-        val unitFontSize = (10f * scale).sp
-        val topPadding = (sizeDp * 0.36f).dp
-
-        Canvas(modifier = Modifier.fillMaxSize().padding((sizeDp * 0.05f).dp)) {
-            val center = Offset(size.width / 2f, size.height / 2f)
-            val radius = (size.minDimension / 2f) - (8f * scale)
-
-            // Fondo circular con gradiente radial
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(Color(0xFF1B202A), CarbonBlack),
-                    center = center,
-                    radius = radius + (8f * scale)
-                ),
-                radius = radius + (4f * scale),
-                center = center
-            )
-
-            // Borde exterior
-            drawCircle(
-                color = Color(0xFF2C3542),
-                radius = radius + (4f * scale),
-                center = center,
-                style = Stroke(width = 2.5f * scale)
-            )
-
-            // Arco base
-            drawArc(
-                color = Color(0xFF1E2530),
-                startAngle = startAngle,
-                sweepAngle = sweepAngle,
-                useCenter = false,
-                topLeft = Offset(center.x - radius, center.y - radius),
-                size = Size(radius * 2, radius * 2),
-                style = Stroke(width = 8f * scale, cap = StrokeCap.Round)
-            )
-
-            // Arco activo
-            val activeSweep = (progress * sweepAngle).coerceAtLeast(1f)
-            drawArc(
-                brush = Brush.sweepGradient(
-                    colors = listOf(NeonCyan, primaryColor, GaugeRedline),
-                    center = center
-                ),
-                startAngle = startAngle,
-                sweepAngle = activeSweep,
-                useCenter = false,
-                topLeft = Offset(center.x - radius, center.y - radius),
-                size = Size(radius * 2, radius * 2),
-                style = Stroke(width = 8f * scale, cap = StrokeCap.Round)
-            )
-
-            // Arco de zona roja
-            if (redlineStart < maxValue) {
-                val redlineProgress = ((redlineStart - minValue) / (maxValue - minValue)).coerceIn(0f, 1f)
-                val redlineSweep = sweepAngle * (1f - redlineProgress)
-                val redlineStartAngle = startAngle + (redlineProgress * sweepAngle)
-
-                drawArc(
-                    color = DangerRed.copy(alpha = 0.45f),
-                    startAngle = redlineStartAngle,
-                    sweepAngle = redlineSweep,
-                    useCenter = false,
-                    topLeft = Offset(center.x - radius, center.y - radius),
-                    size = Size(radius * 2, radius * 2),
-                    style = Stroke(width = 11f * scale, cap = StrokeCap.Butt)
-                )
+    val car = LocalCarMode.current
+    val span = (maxValue - minValue).takeIf { it.isFinite() && it > 0f } ?: 1f
+    val safeValue = if (value.isFinite()) value else minValue
+    val animated by animateFloatAsState(safeValue.coerceIn(minValue, minValue + span), tween(180), label = "racingGauge")
+    val progress = ((animated - minValue) / span).coerceIn(0f, 1f)
+    val tickPaint = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER; typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL) } }
+    BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
+        val diameter = minOf(maxWidth, maxHeight)
+        val scale = (diameter.value / 220f).coerceIn(0.45f, 2.2f)
+        Box(Modifier.size(diameter), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.fillMaxSize().padding(8.dp)) {
+                val center = Offset(size.width / 2, size.height / 2)
+                val radius = size.minDimension * 0.45f
+                val arcSize = Size(radius * 2, radius * 2)
+                val arcOrigin = center - Offset(radius, radius)
+                drawCircle(Brush.radialGradient(listOf(CardBackground, DarkSurface), center, radius), radius, center)
+                drawArc(BorderDark.copy(alpha = 0.6f), 120f, 300f, false, arcOrigin, arcSize, style = Stroke(5.dp.toPx() * scale))
+                val redStart = ((redlineStart - minValue) / span).coerceIn(0f, 1f)
+                drawArc(DangerRed.copy(alpha = 0.3f), 120f + redStart * 300f, (1 - redStart) * 300f, false,
+                    arcOrigin, arcSize, style = Stroke(5.dp.toPx() * scale))
+                drawArc(primaryColor.copy(alpha = 0.12f), 120f, progress * 300f, false, arcOrigin, arcSize,
+                    style = Stroke(12.dp.toPx() * scale, cap = StrokeCap.Round))
+                drawArc(primaryColor, 120f, progress * 300f, false, arcOrigin, arcSize,
+                    style = Stroke(4.dp.toPx() * scale, cap = StrokeCap.Round))
+                val majorSteps = if (majorTickStep.isFinite() && majorTickStep > 0f)
+                    (span / majorTickStep).roundToInt().coerceIn(1, 16) else 5
+                val minorSteps = majorSteps * 4
+                for (i in 0..minorSteps) {
+                    val fraction = i.toFloat() / minorSteps
+                    val angle = Math.toRadians((120 + fraction * 300).toDouble())
+                    val direction = Offset(cos(angle).toFloat(), sin(angle).toFloat())
+                    val major = i % 4 == 0
+                    drawLine(if (fraction >= redStart) DangerRed.copy(alpha = 0.8f) else TextMuted.copy(alpha = if (major) 0.8f else 0.3f),
+                        center + direction * (radius * if (major) 0.80f else 0.86f), center + direction * (radius * 0.91f),
+                        strokeWidth = (if (major) 1.5f else 0.8f).dp.toPx() * scale)
+                    if (major && diameter.value >= if (car) 300 else 155) {
+                        val tick = minValue + fraction * span
+                        val label = when {
+                            kotlin.math.abs(tick) >= 1_000_000_000f -> String.format(Locale.US, "%.1fG", tick / 1_000_000_000f)
+                            kotlin.math.abs(tick) >= 1_000_000f -> String.format(Locale.US, "%.1fM", tick / 1_000_000f)
+                            kotlin.math.abs(tick) >= 1000f -> String.format(Locale.US, "%.1fk", tick / 1000f)
+                            majorTickStep < 1f -> {
+                                val precision = if (majorTickStep > 0f) (-floor(log10(majorTickStep.toDouble()))).toInt().coerceAtLeast(1) else 7
+                                if (precision > 6) String.format(Locale.US, "%.1e", tick)
+                                else String.format(Locale.US, "%.${precision}f", tick)
+                            }
+                            else -> String.format(Locale.US, "%.0f", tick)
+                        }
+                        val point = center + direction * (radius * 0.67f)
+                        tickPaint.textSize = if (car) 24.sp.toPx() else 10.sp.toPx() * scale
+                        tickPaint.color = (if (fraction >= redStart) DangerRed else TextMuted).toArgb()
+                        drawContext.canvas.nativeCanvas.drawText(label, point.x, point.y + tickPaint.textSize * 0.35f, tickPaint)
+                    }
+                }
+                val angle = Math.toRadians((120 + progress * 300).toDouble())
+                val direction = Offset(cos(angle).toFloat(), sin(angle).toFloat())
+                if (value.isFinite()) drawLine(TextWhite, center + direction * radius * 0.75f, center + direction * radius * 1.02f,
+                    strokeWidth = 2.5.dp.toPx() * scale, cap = StrokeCap.Round)
             }
-
-            // Marcas radiales
-            val numSteps = ((maxValue - minValue) / majorTickStep).toInt().coerceAtLeast(1)
-            for (step in 0..numSteps) {
-                val tickVal = minValue + step * majorTickStep
-                val tickProgress = (tickVal - minValue) / (maxValue - minValue)
-                val tickAngle = startAngle + (tickProgress * sweepAngle)
-                val rad = (tickAngle * PI / 180.0).toFloat()
-
-                val isRedlineTick = tickVal >= redlineStart
-                val tickColor = if (isRedlineTick) GaugeRedline else TextMuted
-                val tickLength = 10f * scale
-
-                val outerX = center.x + (radius - 6f * scale) * cos(rad)
-                val outerY = center.y + (radius - 6f * scale) * sin(rad)
-                val innerX = center.x + (radius - 6f * scale - tickLength) * cos(rad)
-                val innerY = center.y + (radius - 6f * scale - tickLength) * sin(rad)
-
-                drawLine(
-                    color = tickColor,
-                    start = Offset(innerX, innerY),
-                    end = Offset(outerX, outerY),
-                    strokeWidth = 2f * scale,
-                    cap = StrokeCap.Round
-                )
+            Column(Modifier.width(diameter * 0.68f).padding(top = (diameter.value * 0.14f).dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(title, color = TextMuted, fontSize = (10 * scale).coerceAtLeast(9f).sp, letterSpacing = 0.3.sp,
+                    fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                FittedValue(formattedValue ?: if (!value.isFinite()) "—" else if (maxValue >= 1000 || majorTickStep >= 1) String.format(Locale.US, "%.0f", safeValue) else String.format(Locale.US, "%.1f", safeValue),
+                    color = TextWhite, fontSize = (38 * scale).coerceAtLeast(22f).sp, letterSpacing = (-1.5 * scale).sp,
+                    fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Text(unit, color = primaryColor, fontSize = (10 * scale).coerceAtLeast(9f).sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
             }
-
-            // Aguja indicadora
-            val needleRad = (needleAngleDeg * PI / 180.0).toFloat()
-            val needleLength = radius - (12f * scale)
-            val needleTipX = center.x + needleLength * cos(needleRad)
-            val needleTipY = center.y + needleLength * sin(needleRad)
-
-            val tailLength = 14f * scale
-            val tailX = center.x - tailLength * cos(needleRad)
-            val tailY = center.y - tailLength * sin(needleRad)
-
-            drawLine(
-                color = primaryColor,
-                start = Offset(tailX, tailY),
-                end = Offset(needleTipX, needleTipY),
-                strokeWidth = 3.5f * scale,
-                cap = StrokeCap.Round
-            )
-
-            // Eje central
-            drawCircle(
-                color = Color(0xFF333E4D),
-                radius = 9f * scale,
-                center = center
-            )
-            drawCircle(
-                color = primaryColor,
-                radius = 5f * scale,
-                center = center
-            )
-        }
-
-        // Display central integrado
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(top = topPadding)
-        ) {
-            Text(
-                text = title,
-                color = TextMuted,
-                fontSize = titleFontSize,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1
-            )
-            Text(
-                text = if (maxValue >= 1000f) {
-                    animatedValue.toInt().toString()
-                } else {
-                    String.format("%.1f", animatedValue)
-                },
-                color = TextWhite,
-                fontSize = valueFontSize,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.ExtraBold,
-                maxLines = 1
-            )
-            Text(
-                text = unit,
-                color = primaryColor,
-                fontSize = unitFontSize,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1
-            )
         }
     }
 }

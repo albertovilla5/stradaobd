@@ -18,14 +18,7 @@ object SupportedPidsDetector {
         val dataBytes = Elm327Protocol.extractDataBytes(basePidHex, rawResponse)
         if (dataBytes.size < 4) return supported
 
-        val baseOffset = when (basePidHex.uppercase().takeLast(2)) {
-            "00" -> 0x01
-            "20" -> 0x21
-            "40" -> 0x41
-            "60" -> 0x61
-            "80" -> 0x81
-            else -> 0x01
-        }
+        val baseOffset = (basePidHex.takeLast(2).toIntOrNull(16) ?: 0) + 1
 
         var pidCounter = baseOffset
         for (byteVal in dataBytes.take(4)) {
@@ -45,14 +38,22 @@ object SupportedPidsDetector {
     /**
      * Determina si una respuesta OBD indica que el sensor no está soportado en la ECU.
      */
-    fun isResponseUnsupported(rawResponse: String): Boolean {
+    /** NO DATA/timeouts are not proof of incompatibility. Only explicit ECU rejection is. */
+    fun responseFailure(command: String, rawResponse: String): com.torqueobd2.dash.data.model.SensorTelemetryStatus? {
         val clean = Elm327Protocol.cleanResponse(rawResponse).uppercase()
-        return clean.contains("NO DATA") ||
-                clean.contains("UNABLE TO CONNECT") ||
-                clean.contains("ERROR") ||
-                clean.contains("7F 22") ||
-                clean.contains("STOPPED") ||
-                clean.isEmpty()
+        val responseLines = rawResponse.split(Regex("[\\r\\n]+"))
+            .map { Elm327Protocol.cleanResponse(it).uppercase().replace(" ", "") }
+        val mode = command.replace(" ", "").take(2).uppercase()
+        val rejection = responseLines.any { it.matches(Regex("7F" + mode + "(11|12|31)")) }
+        return when {
+            rejection -> com.torqueobd2.dash.data.model.SensorTelemetryStatus.INCOMPATIBLE
+            clean.isEmpty() || clean.contains("NO DATA") || clean.contains("UNABLE TO CONNECT") ||
+                clean.contains("STOPPED") || clean.contains("BUS BUSY") || responseLines.any { it.matches(Regex("7F" + mode + "[0-9A-F]{2}")) } ->
+                com.torqueobd2.dash.data.model.SensorTelemetryStatus.NO_RESPONSE
+            Elm327Protocol.diagnoseResponseError(rawResponse) != null ->
+                com.torqueobd2.dash.data.model.SensorTelemetryStatus.INVALID_RESPONSE
+            else -> null
+        }
     }
 
     /**
@@ -62,21 +63,27 @@ object SupportedPidsDetector {
     fun updatePidsSupport(
         allPids: List<ObdPid>,
         supportedStandardPids: Set<String>,
-        extendedResponses: Map<String, Boolean>
+        extendedResponses: Map<String, Boolean>,
+        checkedStandardPids: Set<String> = (1..255).map { "%02X".format(it) }.toSet()
     ): List<ObdPid> {
         return allPids.map { pid ->
             val cmd = pid.cleanObdCommand()
             val supported = when {
                 cmd.startsWith("01") && cmd.length >= 4 -> {
                     val pidHex = cmd.substring(2, 4)
-                    supportedStandardPids.contains(pidHex)
+                    if (pidHex in checkedStandardPids) supportedStandardPids.contains(pidHex) else pid.isSupported
                 }
                 cmd.startsWith("22") -> {
-                    extendedResponses[cmd] ?: true // Si aún no se ha probado, mantener provisionalmente
+                    extendedResponses[cmd] ?: pid.isSupported // Si aún no se ha probado, mantener provisionalmente
                 }
                 else -> true
             }
-            pid.copy(isSupported = supported)
+            val checked = when {
+                cmd.startsWith("01") -> cmd.takeLast(2) in checkedStandardPids || pid.supportChecked
+                cmd.startsWith("22") -> cmd in extendedResponses || pid.supportChecked
+                else -> pid.supportChecked
+            }
+            pid.copy(isSupported = supported, supportChecked = checked)
         }
     }
 }

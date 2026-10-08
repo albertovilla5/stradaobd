@@ -72,6 +72,9 @@ object TorqueCsvParser {
                         val category = categorizePid(name, shortName, modeAndPid)
                         pids.add(
                             ObdPid(
+                                id = java.util.UUID.nameUUIDFromBytes(listOf(modeAndPid.removePrefix("0x").uppercase(),
+                                    header.replace(" ", "").uppercase(), name, shortName, equation, units)
+                                    .joinToString("\u0000").toByteArray(Charsets.UTF_8)).toString(),
                                 name = name,
                                 shortName = shortName,
                                 modeAndPid = modeAndPid,
