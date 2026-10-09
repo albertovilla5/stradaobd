@@ -193,6 +193,7 @@ fun CustomDashboardScreen(
     onAddSensors: (List<String>) -> Unit,
     fullScreen: Boolean,
     onFullScreenChanged: (Boolean) -> Unit,
+    onEditModeChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
@@ -218,6 +219,13 @@ fun CustomDashboardScreen(
     var deleteTabId by remember { mutableStateOf<String?>(null) }
     var showDesignFiles by remember { mutableStateOf(false) }
     var showBulkSensors by remember { mutableStateOf(false) }
+    val isAnyModalOrEditing = isEditMode || showCarPanels || showAddDialog || showPresetsDialog ||
+        showGridDialog || showCreateTab || renameTabId != null || showOrderDialog ||
+        deleteTabId != null || showDesignFiles || showBulkSensors || showCarTools
+    val currentOnEditModeChanged by rememberUpdatedState(onEditModeChanged)
+    LaunchedEffect(isAnyModalOrEditing) {
+        currentOnEditModeChanged(isAnyModalOrEditing)
+    }
     LaunchedEffect(customDashboard.id, customDashboard.gridLayout) {
         showAddDialog = false; targetSlotForAdd = null; transferSource = null; selectedSlot = null
     }
@@ -345,7 +353,7 @@ fun CustomDashboardScreen(
                                     })
                             }
                         }
-                        if (!isEditMode && !car) {
+                        if (!isEditMode && !car && !fullScreen) {
                             Surface(onClick = { isEditMode = true },
                                 modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(if (car) 76.dp else 36.dp)
                                     .semantics { contentDescription = "Editar dashboard" },
@@ -542,13 +550,13 @@ private fun DashboardGridViewport(config: CustomDashboardConfig, editing: Boolea
     BoxWithConstraints(modifier) {
         if (car) {
             val scale = LocalDensity.current.fontScale
-            val controlsHeight = if (editing) 0.dp else maxOf(40.dp, 36.dp * scale)
-            val controlsSpacing = if (editing) 0.dp else 6.dp
+            val controlsHeight = if (editing || isFullScreen) 0.dp else maxOf(40.dp, 36.dp * scale)
+            val controlsSpacing = if (editing || isFullScreen) 0.dp else 6.dp
             val grid = DashboardLayoutPolicy.carGrid(config.gridLayout, maxWidth.value,
-                (maxHeight - if (editing) 0.dp else controlsHeight + controlsSpacing).value)
+                (maxHeight - if (editing || isFullScreen) 0.dp else controlsHeight + controlsSpacing).value)
             Column(Modifier.fillMaxSize().semantics { contentDescription = "Indicadores del dashboard" }) {
                 Box(Modifier.weight(1f).fillMaxWidth()) { content(grid.slots, grid.columns, grid.split) }
-                if (!editing) Row(
+                if (!editing && !isFullScreen) Row(
                     Modifier.fillMaxWidth().padding(top = controlsSpacing).height(controlsHeight),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween

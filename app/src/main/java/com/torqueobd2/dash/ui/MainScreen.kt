@@ -1,5 +1,16 @@
 package com.torqueobd2.dash.ui
 
+import android.app.Activity
+import android.content.ContextWrapper
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.changedToDown
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import kotlinx.coroutines.delay
 import com.torqueobd2.dash.ui.automotive.*
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import android.bluetooth.BluetoothAdapter
@@ -124,11 +135,39 @@ fun MainScreen(viewModel: ObdDashboardViewModel, modifier: Modifier = Modifier) 
     )
     var savedTabIndex by rememberSaveable { mutableIntStateOf(0) }
     var dashboardFullScreen by rememberSaveable { mutableStateOf(false) }
-    BackHandler(enabled = dashboardFullScreen) { dashboardFullScreen = false }
+    var isDashboardEditing by rememberSaveable { mutableStateOf(false) }
+    var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var isConsumingWakeGesture by remember { mutableStateOf(false) }
+
     var selectedSettingsTab by rememberSaveable { mutableIntStateOf(-1) }
     var carMenuVisible by rememberSaveable { mutableStateOf(false) }
     val car = LocalCarMode.current
     val selectedTabIndex = savedTabIndex.coerceIn(tabs.indices)
+
+    val isPanelsTab = (selectedTabIndex == 1) && !carMenuVisible
+    val currentIsPanelsTab by rememberUpdatedState(isPanelsTab)
+    val currentDashboardFullScreen by rememberUpdatedState(dashboardFullScreen)
+
+    LaunchedEffect(isPanelsTab) {
+        if (isPanelsTab) {
+            lastInteractionTime = System.currentTimeMillis()
+        } else {
+            dashboardFullScreen = false
+        }
+    }
+
+    LaunchedEffect(isPanelsTab, dashboardFullScreen, isDashboardEditing, lastInteractionTime) {
+        if (isPanelsTab && !dashboardFullScreen && !isDashboardEditing) {
+            val remaining = PanelsFullScreenPolicy.remainingDelayMs(lastInteractionTime, System.currentTimeMillis())
+            delay(remaining)
+            dashboardFullScreen = true
+        }
+    }
+
+    BackHandler(enabled = dashboardFullScreen) {
+        dashboardFullScreen = false
+        lastInteractionTime = System.currentTimeMillis()
+    }
     var gridVisibleSensors by remember { mutableStateOf(emptySet<String>()) }
     var vehicleVisibleSensors by remember { mutableStateOf(emptySet<String>()) }
     val visibleSensors = when (if (car && carMenuVisible) -1 else selectedTabIndex) {
@@ -164,6 +203,8 @@ fun MainScreen(viewModel: ObdDashboardViewModel, modifier: Modifier = Modifier) 
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
         carMenuVisible = false
         savedTabIndex = it
+        dashboardFullScreen = false
+        lastInteractionTime = System.currentTimeMillis()
     }
     val screen: @Composable () -> Unit = {
         ScreenContent(
@@ -177,7 +218,12 @@ fun MainScreen(viewModel: ObdDashboardViewModel, modifier: Modifier = Modifier) 
             onSettingsTabSelected = { selectedSettingsTab = it },
             onGridSensorsChanged = { gridVisibleSensors = it },
             onVehicleSensorsChanged = { vehicleVisibleSensors = it },
-            dashboardFullScreen = dashboardFullScreen, onDashboardFullScreenChanged = { dashboardFullScreen = it }
+            dashboardFullScreen = dashboardFullScreen,
+            onDashboardFullScreenChanged = {
+                dashboardFullScreen = it
+                lastInteractionTime = System.currentTimeMillis()
+            },
+            onDashboardEditingChanged = { isDashboardEditing = it }
         )
     }
     val carBack: () -> Unit = {
@@ -187,7 +233,67 @@ fun MainScreen(viewModel: ObdDashboardViewModel, modifier: Modifier = Modifier) 
     }
     BackHandler(enabled = car && !dashboardFullScreen && (carMenuVisible || selectedTabIndex > 1)) { carBack() }
     val openSettings: (Int) -> Unit = { section -> selectedSettingsTab = section; selectTab(4) }
-    Column(modifier.fillMaxSize().background(if (car) com.torqueobd2.dash.ui.theme.CockpitBackground else CarbonBlack).safeDrawingPadding().imePadding()) {
+
+    val isFullScreenActive = dashboardFullScreen && selectedTabIndex == 1
+    val view = LocalView.current
+    val activity = view.context as? Activity ?: (view.context as? ContextWrapper)?.baseContext as? Activity
+    val window = activity?.window
+
+    DisposableEffect(isFullScreenActive, window) {
+        if (window != null && isFullScreenActive) {
+            val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+            val prevBehavior = insetsController.systemBarsBehavior
+            insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            insetsController.hide(WindowInsetsCompat.Type.systemBars())
+            onDispose {
+                insetsController.show(WindowInsetsCompat.Type.systemBars())
+                insetsController.systemBarsBehavior = prevBehavior
+            }
+        } else {
+            onDispose { }
+        }
+    }
+
+    val panelsTouchModifier = Modifier.pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                if (currentIsPanelsTab) {
+                    val anyPressed = event.changes.any { it.pressed }
+                    val hasDown = event.changes.any { it.changedToDown() }
+
+                    if (currentDashboardFullScreen || isConsumingWakeGesture) {
+                        if (hasDown || event.type == PointerEventType.Press) {
+                            isConsumingWakeGesture = true
+                            dashboardFullScreen = false
+                            lastInteractionTime = System.currentTimeMillis()
+                        }
+                        if (isConsumingWakeGesture) {
+                            event.changes.forEach { it.consume() }
+                            if (!anyPressed) {
+                                isConsumingWakeGesture = false
+                            }
+                        }
+                    } else {
+                        if (hasDown || anyPressed) {
+                            lastInteractionTime = System.currentTimeMillis()
+                        }
+                    }
+                } else {
+                    isConsumingWakeGesture = false
+                }
+            }
+        }
+    }
+
+    Column(
+        modifier
+            .fillMaxSize()
+            .background(if (car) com.torqueobd2.dash.ui.theme.CockpitBackground else CarbonBlack)
+            .then(if (isFullScreenActive) Modifier else Modifier.safeDrawingPadding())
+            .imePadding()
+            .then(panelsTouchModifier)
+    ) {
         SensorAlertBanner(sensorAlerts)
         if (dashboardFullScreen && selectedTabIndex == 1) { Box(Modifier.weight(1f)) { screen() } }
         else if (car) {
@@ -199,7 +305,7 @@ fun MainScreen(viewModel: ObdDashboardViewModel, modifier: Modifier = Modifier) 
                 selected = selectedTabIndex, menuVisible = carMenuVisible,
                 diagnosticCount = dtcState.report?.codes?.size?.takeIf { it > 0 },
                 onDriving = { selectTab(0) }, onPanels = { selectTab(1) },
-                onMenu = { carMenuVisible = true }, onDiagnostics = { selectTab(5) }, onBack = { backDispatcher?.onBackPressed() ?: carBack() }, onConnection = { openSettings(1) }) {
+                onMenu = { carMenuVisible = true; dashboardFullScreen = false }, onDiagnostics = { selectTab(5) }, onBack = { backDispatcher?.onBackPressed() ?: carBack() }, onConnection = { openSettings(1) }) {
                 if (carMenuVisible) CarMenu(listOf(
                     CarMenuEntry("Vehículo", "Garaje y calibración", Icons.Default.DirectionsCar) { selectTab(2) },
                     CarMenuEntry("Sensores", "Lecturas y catálogo", Icons.Default.Dashboard) { selectTab(3) },
@@ -322,7 +428,8 @@ private fun ScreenContent(
     onSettingsTabSelected: (Int) -> Unit,
     onGridSensorsChanged: (Set<String>) -> Unit,
     onVehicleSensorsChanged: (Set<String>) -> Unit,
-    dashboardFullScreen: Boolean, onDashboardFullScreenChanged: (Boolean) -> Unit
+    dashboardFullScreen: Boolean, onDashboardFullScreenChanged: (Boolean) -> Unit,
+    onDashboardEditingChanged: (Boolean) -> Unit = {}
 ) {
     when (tabIndex) {
         5 -> DtcDiagnosticsScreen(
@@ -364,7 +471,8 @@ private fun ScreenContent(
             onImportDesigns = viewModel::importDashboardDesigns,
             onAddSensors = viewModel::addDashboardSensors,
             fullScreen = dashboardFullScreen,
-            onFullScreenChanged = onDashboardFullScreenChanged
+            onFullScreenChanged = onDashboardFullScreenChanged,
+            onEditModeChanged = onDashboardEditingChanged
         )
         2 -> VehicleConfigScreen(
             activeProfile = vehicleProfile,
