@@ -13,6 +13,8 @@ import androidx.core.app.ServiceCompat
 import com.torqueobd2.dash.MainActivity
 import com.torqueobd2.dash.TorqueApplication
 import com.torqueobd2.dash.data.model.ConnectionType
+import com.torqueobd2.dash.i18n.AppI18n
+import com.torqueobd2.dash.i18n.tr
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
@@ -27,14 +29,26 @@ class TelemetryForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        ensureChannel()
+    }
+
+    private fun ensureChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
             getSystemService(NotificationManager::class.java).createNotificationChannel(
-                NotificationChannel(CHANNEL, "Lectura OBD y grabación", NotificationManager.IMPORTANCE_LOW).apply {
-                    description = "Control de las sesiones de lectura de sensores en segundo plano"
+                NotificationChannel(
+                    CHANNEL,
+                    tr("Lectura OBD y grabación", "OBD reading and recording"),
+                    NotificationManager.IMPORTANCE_LOW
+                ).apply {
+                    description = tr(
+                        "Control de las sesiones de lectura de sensores en segundo plano",
+                        "Control of background sensor reading sessions"
+                    )
                     setSound(null, null)
                     enableVibration(false)
                     setShowBadge(false)
-                })
+                }
+            )
         }
     }
 
@@ -46,9 +60,15 @@ class TelemetryForegroundService : Service() {
                 started = true
                 runtime.onServiceStarted()
                 scope.launch {
-                    combine(runtime.recording.map { it.active?.id }.distinctUntilChanged(),
-                        runtime.manager.connectionState.map { Triple(it.type, it.status, it.statusMessage) }.distinctUntilChanged()) { _, _ -> Unit }
-                        .collect { getSystemService(NotificationManager::class.java).notify(NOTIFICATION, notification()) }
+                    combine(
+                        runtime.recording.map { it.active?.id }.distinctUntilChanged(),
+                        runtime.manager.connectionState.map { Triple(it.type, it.status, it.statusMessage) }.distinctUntilChanged(),
+                        AppI18n.languageFlow
+                    ) { _, _, _ -> Unit }
+                        .collect {
+                            ensureChannel()
+                            getSystemService(NotificationManager::class.java).notify(NOTIFICATION, notification())
+                        }
                 }
                 scope.launch {
                     while (isActive) {
@@ -58,7 +78,9 @@ class TelemetryForegroundService : Service() {
                     }
                 }
             } catch (e: RuntimeException) {
-                runtime.manager.logDiagnostic("No se pudo iniciar el servicio OBD: ${e.message}")
+                runtime.manager.logDiagnostic(
+                    tr("No se pudo iniciar el servicio OBD: ${e.message}", "Could not start OBD service: ${e.message}")
+                )
                 stopSelf()
                 return START_NOT_STICKY
             }
@@ -75,13 +97,19 @@ class TelemetryForegroundService : Service() {
         val session = runtime.recording.value.active
         val simulated = connection.type == ConnectionType.SIMULATION
         val title = when {
-            session != null && simulated -> "Grabando · SIMULACIÓN"
-            session != null -> "Grabando sensores OBD"
-            simulated -> "Lectura en segundo plano · SIMULACIÓN"
-            else -> "Lectura OBD en segundo plano"
+            session != null && simulated -> tr("Grabando · SIMULACIÓN", "Recording · SIMULATION")
+            session != null -> tr("Grabando sensores OBD", "Recording OBD sensors")
+            simulated -> tr("Lectura en segundo plano · SIMULACIÓN", "Background reading · SIMULATION")
+            else -> tr("Lectura OBD en segundo plano", "Background OBD reading")
         }
-        val text = if (session != null) "${session.context.vehicleName} · ${session.sampleCount} muestras · ${connection.statusMessage}"
-            else "${runtime.manager.vehicleProfile.value.name} · ${connection.statusMessage}"
+        val text = if (session != null) {
+            tr(
+                "${session.context.vehicleName} · ${session.sampleCount} muestras · ${connection.statusMessage}",
+                "${session.context.vehicleName} · ${session.sampleCount} samples · ${connection.statusMessage}"
+            )
+        } else {
+            "${runtime.manager.vehicleProfile.value.name} · ${connection.statusMessage}"
+        }
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return NotificationCompat.Builder(this, CHANNEL)
@@ -90,8 +118,8 @@ class TelemetryForegroundService : Service() {
             .setContentIntent(open).setShowWhen(false).setOngoing(true).setOnlyAlertOnce(true).setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE).setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .apply {
-                if (session != null) addAction(0, "Detener grabación", action(STOP_RECORDING, 1))
-                addAction(0, "Detener lectura", action(STOP_ALL, 2))
+                if (session != null) addAction(0, tr("Detener grabación", "Stop recording"), action(STOP_RECORDING, 1))
+                addAction(0, tr("Detener lectura", "Stop reading"), action(STOP_ALL, 2))
             }.build()
     }
 
@@ -103,7 +131,7 @@ class TelemetryForegroundService : Service() {
     private fun updateLocks() {
         val now = android.os.SystemClock.elapsedRealtime()
         if (wakeLock == null) wakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager)
-            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TorqueOBD2:telemetry").apply { setReferenceCounted(false) }
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "StradaOBD:telemetry").apply { setReferenceCounted(false) }
         // Plazo acotado, renovado mientras el servicio sigue vivo.
         if (wakeLock?.isHeld != true || now - lastWakeRefresh >= 300_000) {
             wakeLock?.acquire(600_000)
@@ -111,7 +139,7 @@ class TelemetryForegroundService : Service() {
         }
         val wifi = runtime.manager.connectionState.value.type == ConnectionType.WIFI
         if (wifi && wifiLock == null) wifiLock = (applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager)
-            ?.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "TorqueOBD2:wifi")?.apply { setReferenceCounted(false) }
+            ?.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "StradaOBD:wifi")?.apply { setReferenceCounted(false) }
         if (wifi && wifiLock?.isHeld != true) wifiLock?.acquire()
         if (!wifi && wifiLock?.isHeld == true) wifiLock?.release()
     }
@@ -130,7 +158,8 @@ class TelemetryForegroundService : Service() {
     companion object {
         private const val CHANNEL = "obd_telemetry"
         private const val NOTIFICATION = 42
-        private const val STOP_RECORDING = "com.torqueobd2.dash.STOP_RECORDING"
-        private const val STOP_ALL = "com.torqueobd2.dash.STOP_ALL"
+        private const val STOP_RECORDING = "com.stradaobd.dash.STOP_RECORDING"
+        private const val STOP_ALL = "com.stradaobd.dash.STOP_ALL"
     }
 }
+

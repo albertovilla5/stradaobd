@@ -1,13 +1,30 @@
 package com.torqueobd2.dash.data.model
 
+import com.torqueobd2.dash.i18n.tr
 import org.json.JSONObject
 import java.util.UUID
 
-enum class FuelType(val displayName: String, val stoichiometricRatio: Float, val densityGramsPerLiter: Float) {
-    DIESEL("Diésel", 14.5f, 832f),
-    GASOLINE("Gasolina (E5/E10)", 14.7f, 745f),
-    LPG("GLP / Autogas", 15.5f, 540f),
-    HYBRID("Híbrido (Gasolina/Eléctrico)", 14.7f, 745f)
+enum class FuelType(val stoichiometricRatio: Float, val densityGramsPerLiter: Float) {
+    DIESEL(14.5f, 832f),
+    GASOLINE(14.7f, 745f),
+    LPG(15.5f, 540f),
+    HYBRID(14.7f, 745f);
+
+    val displayName: String
+        get() = when (this) {
+            DIESEL -> tr("Diésel", "Diesel")
+            GASOLINE -> tr("Gasolina (E5/E10)", "Gasoline (E5/E10)")
+            LPG -> tr("GLP / Autogas", "LPG / Autogas")
+            HYBRID -> tr("Híbrido (Gasolina/Eléctrico)", "Hybrid (Gasoline/Electric)")
+        }
+
+    val shortDisplayName: String
+        get() = when (this) {
+            DIESEL -> tr("Diésel", "Diesel")
+            GASOLINE -> tr("Gasolina", "Gasoline")
+            LPG -> tr("GLP", "LPG")
+            HYBRID -> tr("Híbrido", "Hybrid")
+        }
 }
 
 /**
@@ -57,7 +74,7 @@ data class VehicleProfile(
             }
             return VehicleProfile(
                 id = json.optString("id", UUID.randomUUID().toString()),
-                name = json.optString("name", "Vehículo"),
+                name = json.optString("name", tr("Vehículo", "Vehicle")),
                 modelYear = json.optString("modelYear", "2015"),
                 engineDisplacementLiters = json.optDouble("engineDisplacementLiters", 2.0).toFloat(),
                 fuelTankCapacityLiters = json.optDouble("fuelTankCapacityLiters", 50.0).toFloat(),

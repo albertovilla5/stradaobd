@@ -85,7 +85,11 @@ fun TerminalScreen(
             .background(CarbonBlack)
             .padding(16.dp)
     ) {
-        if (!car) RacingHeader("Terminal OBD", "Comandos AT y consultas directas a la centralita.", eyebrow = "DIAGNÓSTICO / CONSOLA")
+        if (!car) RacingHeader(
+            com.torqueobd2.dash.i18n.tr("Terminal OBD", "OBD Terminal"),
+            com.torqueobd2.dash.i18n.tr("Comandos AT y consultas directas a la centralita.", "AT commands and direct ECU queries."),
+            eyebrow = com.torqueobd2.dash.i18n.tr("DIAGNÓSTICO / CONSOLA", "DIAGNOSTICS / CONSOLE")
+        )
 
         Spacer(modifier = Modifier.height(10.dp))
 
@@ -156,7 +160,7 @@ fun TerminalScreen(
             OutlinedTextField(
                 value = commandInput,
                 onValueChange = { commandInput = it },
-                placeholder = { Text("Comando (ej: 010C)", color = TextMuted, fontSize = 13.sp) },
+                placeholder = { Text(com.torqueobd2.dash.i18n.tr("Comando (ej: 010C)", "Command (e.g., 010C)"), color = TextMuted, fontSize = 13.sp) },
                 singleLine = true,
                 modifier = Modifier.weight(1f)
             )
@@ -173,7 +177,7 @@ fun TerminalScreen(
                 colors = ButtonDefaults.buttonColors(containerColor = RacingOrange),
                 shape = RoundedCornerShape(8.dp)
             ) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Enviar")
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = com.torqueobd2.dash.i18n.tr("Enviar", "Send"))
             }
         }
     }    }

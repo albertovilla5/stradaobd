@@ -12,7 +12,7 @@ object SensorIds {
 /** Una referencia con ID nunca cambia de sensor por coincidencia de nombre. */
 fun DashboardWidget.resolvePid(pids: List<ObdPid>): ObdPid? =
     if (pidId.isNotBlank()) pids.singleOrNull { it.id == pidId }
-    else pids.filter { it.shortName == pidShortName }.let { matches ->
+    else pids.filter { it.shortName == pidShortName || (pidShortName.isNotBlank() && it.id.endsWith("_$pidShortName")) }.let { matches ->
         matches.singleOrNull() ?: matches.singleOrNull { it.name == title }
     }
 

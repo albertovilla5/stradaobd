@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Reglas de extracción de datos y copia en la nube para Android 12+ (API 31+ / Google Play Store targetSdk 35).
+    Solo se respaldan en Google Drive y en transferencias dispositivo-a-dispositivo los datos de
+    configuración del usuario (perfiles de vehículos, dashboards personalizados, catálogo de sensores/PIDs,
+    reglas de alertas y preferencias de interfaz).
+    Se excluyen explícitamente por omisión obd_connection.xml (direcciones MAC Bluetooth, IP WiFi y modo simulación)
+    y los archivos pesados de telemetría.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="sharedpref" path="torque_obd_prefs.xml" />
+        <include domain="sharedpref" path="torque_sensors.xml" />
+        <include domain="sharedpref" path="sensor_alerts.xml" />
+        <include domain="sharedpref" path="interface.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="sharedpref" path="torque_obd_prefs.xml" />
+        <include domain="sharedpref" path="torque_sensors.xml" />
+        <include domain="sharedpref" path="sensor_alerts.xml" />
+        <include domain="sharedpref" path="interface.xml" />
+    </device-transfer>
+</data-extraction-rules>

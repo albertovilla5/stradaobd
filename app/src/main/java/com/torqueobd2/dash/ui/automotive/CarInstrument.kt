@@ -44,15 +44,15 @@ fun CarInstrument(widget: DashboardWidget, definition: ObdPid?, reading: ObdRead
         val short = maxHeight < 160.dp * LocalDensity.current.fontScale + 40.dp
         if (short) {
             val roomy = maxHeight >= 120.dp * LocalDensity.current.fontScale
-            val unit = reading?.units ?: definition?.units.orEmpty()
+            val unit = com.torqueobd2.dash.i18n.trUnit(reading?.units ?: definition?.units.orEmpty())
             val unitMaxWidth = maxWidth * .5f
             val titleSize = if (maxWidth < 190.dp) 16.sp else 22.sp
             val unitSize = if (maxWidth < 190.dp) 16.sp else 22.sp
             Column(Modifier.fillMaxSize().padding(if (roomy) 8.dp else 4.dp)
-                .semantics { contentDescription = "${widget.title}. ${widget.displayValue(reading)} $unit. ${status.label}" },
+                .semantics { contentDescription = "${widget.localizedTitle}. ${widget.displayValue(reading)} $unit. ${status.label}" },
                 verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(widget.title, Modifier.weight(1f), color = CockpitMuted, fontSize = titleSize, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(widget.localizedTitle, Modifier.weight(1f), color = CockpitMuted, fontSize = titleSize, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (unit.isNotEmpty()) Text(unit, Modifier.widthIn(max = unitMaxWidth), color = accent,
                         fontSize = unitSize, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -71,7 +71,7 @@ fun CarInstrument(widget: DashboardWidget, definition: ObdPid?, reading: ObdRead
             return@BoxWithConstraints
         }
         Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(widget.title, color = CockpitMuted, fontSize = 24.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(widget.localizedTitle, color = CockpitMuted, fontSize = 24.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 if (analog) Canvas(Modifier.fillMaxSize()) {
                     val diameter = minOf(size.width, size.height) - 12.dp.toPx()
@@ -92,7 +92,7 @@ fun CarInstrument(widget: DashboardWidget, definition: ObdPid?, reading: ObdRead
                     verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     FittedValue(widget.displayValue(reading), if (tall) 64.sp else 48.sp,
                         color = TextWhite, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
-                    Text(reading?.units ?: definition?.units.orEmpty(), color = accent, fontSize = 24.sp,
+                    Text(com.torqueobd2.dash.i18n.trUnit(reading?.units ?: definition?.units.orEmpty()), color = accent, fontSize = 24.sp,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }

@@ -1,52 +1,79 @@
 package com.torqueobd2.dash.data.model
 
+import com.torqueobd2.dash.i18n.AppLanguage
+import com.torqueobd2.dash.i18n.tr
 import java.util.UUID
 
-enum class WidgetType(val displayName: String) {
-    ANALOG_GAUGE("Reloj Analógico con Aguja"),
-    DIGITAL_HUD("Display Digital Grande"),
-    HORIZONTAL_BAR("Barra de Nivel con Graduación"),
-    SPARKLINE_CHART("Gráfico Histórico en Tiempo Real"),
-    COMPACT_TILE("Tarjeta Compacta")
+enum class WidgetType {
+    ANALOG_GAUGE,
+    DIGITAL_HUD,
+    HORIZONTAL_BAR,
+    SPARKLINE_CHART,
+    COMPACT_TILE;
+
+    val displayName: String
+        get() = when (this) {
+            ANALOG_GAUGE -> tr("Reloj Analógico con Aguja", "Analog Needle Gauge")
+            DIGITAL_HUD -> tr("Display Digital Grande", "Large Digital HUD")
+            HORIZONTAL_BAR -> tr("Barra de Nivel con Graduación", "Graduated Level Bar")
+            SPARKLINE_CHART -> tr("Gráfico Histórico en Tiempo Real", "Real-Time History Chart")
+            COMPACT_TILE -> tr("Tarjeta Compacta", "Compact Tile")
+        }
 }
 
-enum class WidgetSize(val displayName: String) {
-    STANDARD("Tamaño Estándar (1x1)"),
-    FULL_WIDTH("Ancho Completo (2x1)")
+enum class WidgetSize {
+    STANDARD,
+    FULL_WIDTH;
+
+    val displayName: String
+        get() = when (this) {
+            STANDARD -> tr("Tamaño Estándar (1x1)", "Standard Size (1x1)")
+            FULL_WIDTH -> tr("Ancho Completo (2x1)", "Full Width (2x1)")
+        }
 }
 
 enum class DashboardGridLayout(
     val id: String,
-    val title: String,
-    val subtitle: String,
+    private val esTitle: String,
+    private val enTitle: String,
+    private val esSubtitle: String,
+    private val enSubtitle: String,
     val slotCount: Int,
     val badge: String
 ) {
-    GRID_1X1("1x1", "Un indicador", "Una lectura protagonista", 1, "1 x 1"),
-    GRID_1X2("1x2", "2 Columnas Grandes", "2 relojes de gran tamaño", 2, "1 x 2"),
-    GRID_1X3("1x3", "3 Columnas", "3 relojes medianos en línea", 3, "1 x 3"),
-    GRID_1X4("1x4", "4 Columnas", "4 relojes clásicos de salpicadero", 4, "1 x 4"),
-    GRID_2X1("2x1", "2 Filas", "Dos indicadores apilados", 2, "2 x 1"),
-    GRID_2X2("2x2", "Matriz 2x2", "4 cuadrantes simétricos", 4, "2 x 2"),
-    GRID_2X3("2x3", "Matriz 2x3", "6 indicadores compactos", 6, "2 x 3"),
-    GRID_2X4("2x4", "Matriz 2x4", "8 indicadores", 8, "2 x 4"),
-    GRID_2X5("2x5", "Matriz 2x5", "10 indicadores", 10, "2 x 5"),
-    GRID_2X6("2x6", "Matriz 2x6", "12 indicadores en formato ancho", 12, "2 x 6"),
-    GRID_3X3("3x3", "Matriz 3x3", "9 indicadores", 9, "3 x 3"),
-    GRID_3X4("3x4", "Matriz 3x4", "12 indicadores", 12, "3 x 4"),
-    GRID_3X5("3x5", "Matriz 3x5", "15 indicadores", 15, "3 x 5"),
-    GRID_3X6("3x6", "Matriz 3x6", "18 indicadores", 18, "3 x 6"),
-    GRID_4X4("4x4", "Matriz 4x4", "16 indicadores", 16, "4 x 4"),
-    GRID_4X5("4x5", "Matriz 4x5", "20 indicadores", 20, "4 x 5"),
-    GRID_4X6("4x6", "Matriz 4x6", "24 indicadores · Ideal en pantalla completa", 24, "4 x 6"),
-    SPLIT_1_2("1+2", "1 Principal + 2 Laterales", "1 grande a la izquierda, 2 apilados a la derecha", 3, "1 + 2"),
-    SPLIT_2_1("2+1", "2 Laterales + 1 Principal", "2 apilados a la izquierda, 1 grande a la derecha", 3, "2 + 1");
+    GRID_1X1("1x1", "Un indicador", "Single gauge", "Una lectura protagonista", "One featured reading", 1, "1 x 1"),
+    GRID_1X2("1x2", "2 Columnas Grandes", "2 Large Columns", "2 relojes de gran tamaño", "2 large gauges", 2, "1 x 2"),
+    GRID_1X3("1x3", "3 Columnas", "3 Columns", "3 relojes medianos en línea", "3 medium gauges in a row", 3, "1 x 3"),
+    GRID_1X4("1x4", "4 Columnas", "4 Columns", "4 relojes clásicos de salpicadero", "4 classic dashboard gauges", 4, "1 x 4"),
+    GRID_2X1("2x1", "2 Filas", "2 Rows", "Dos indicadores apilados", "Two stacked gauges", 2, "2 x 1"),
+    GRID_2X2("2x2", "Matriz 2x2", "2x2 Grid", "4 cuadrantes simétricos", "4 symmetric quadrants", 4, "2 x 2"),
+    GRID_2X3("2x3", "Matriz 2x3", "2x3 Grid", "6 indicadores compactos", "6 compact gauges", 6, "2 x 3"),
+    GRID_2X4("2x4", "Matriz 2x4", "2x4 Grid", "8 indicadores", "8 gauges", 8, "2 x 4"),
+    GRID_2X5("2x5", "Matriz 2x5", "2x5 Grid", "10 indicadores", "10 gauges", 10, "2 x 5"),
+    GRID_2X6("2x6", "Matriz 2x6", "2x6 Grid", "12 indicadores en formato ancho", "12 gauges in wide format", 12, "2 x 6"),
+    GRID_3X3("3x3", "Matriz 3x3", "3x3 Grid", "9 indicadores", "9 gauges", 9, "3 x 3"),
+    GRID_3X4("3x4", "Matriz 3x4", "3x4 Grid", "12 indicadores", "12 gauges", 12, "3 x 4"),
+    GRID_3X5("3x5", "Matriz 3x5", "3x5 Grid", "15 indicadores", "15 gauges", 15, "3 x 5"),
+    GRID_3X6("3x6", "Matriz 3x6", "3x6 Grid", "18 indicadores", "18 gauges", 18, "3 x 6"),
+    GRID_4X4("4x4", "Matriz 4x4", "4x4 Grid", "16 indicadores", "16 gauges", 16, "4 x 4"),
+    GRID_4X5("4x5", "Matriz 4x5", "4x5 Grid", "20 indicadores", "20 gauges", 20, "4 x 5"),
+    GRID_4X6("4x6", "Matriz 4x6", "4x6 Grid", "24 indicadores · Ideal en pantalla completa", "24 gauges · Ideal in full screen", 24, "4 x 6"),
+    SPLIT_1_2("1+2", "1 Principal + 2 Laterales", "1 Main + 2 Side", "1 grande a la izquierda, 2 apilados a la derecha", "1 large on the left, 2 stacked on the right", 3, "1 + 2"),
+    SPLIT_2_1("2+1", "2 Laterales + 1 Principal", "2 Side + 1 Main", "2 apilados a la izquierda, 1 grande a la derecha", "2 stacked on the left, 1 large on the right", 3, "2 + 1");
 
+    val title: String get() = tr(esTitle, enTitle)
+    val subtitle: String get() = tr(esSubtitle, enSubtitle)
     val preferredColumns: Int get() = if (id.contains('x')) id.substringAfter('x').toInt() else 2
     val isSplit: Boolean get() = id.contains('+')
     val preferredRows: Int get() = if (isSplit) 2 else slotCount / preferredColumns
     val carSupported: Boolean get() = preferredColumns <= 4 && preferredRows <= 2
-    val carTitle: String get() = if (isSplit) title else "$preferredColumns ${if (preferredColumns == 1) "columna" else "columnas"} × $preferredRows ${if (preferredRows == 1) "fila" else "filas"}"
+    val carTitle: String
+        get() {
+            if (isSplit) return title
+            val colLabel = if (preferredColumns == 1) tr("columna", "column") else tr("columnas", "columns")
+            val rowLabel = if (preferredRows == 1) tr("fila", "row") else tr("filas", "rows")
+            return "$preferredColumns $colLabel × $preferredRows $rowLabel"
+        }
     val carBadge: String get() = if (isSplit) badge else "$preferredColumns × $preferredRows"
     fun forCar(): DashboardGridLayout = if (carSupported) this else carLayouts.first {
         !it.isSplit && it.preferredColumns == preferredColumns.coerceAtMost(4) && it.preferredRows == preferredRows.coerceAtMost(2)
@@ -57,13 +84,21 @@ enum class DashboardGridLayout(
     }
 }
 
-enum class DashboardDensity(val title: String) { COMFORTABLE("Normal"), COMPACT("Compacta") }
+enum class DashboardDensity {
+    COMFORTABLE, COMPACT;
+
+    val title: String
+        get() = when (this) {
+            COMFORTABLE -> tr("Normal", "Normal")
+            COMPACT -> tr("Compacta", "Compact")
+        }
+}
 
 data class DashboardWidget(
     val id: String = UUID.randomUUID().toString(),
     val type: WidgetType = WidgetType.ANALOG_GAUGE,
     val pidShortName: String = "RPM",
-    val title: String = "Revoluciones",
+    val title: String = tr("Revoluciones", "Engine RPM"),
     val colorHex: String = "#FF6D00",
     val size: WidgetSize = WidgetSize.STANDARD,
     val pidId: String = "", // Vacío solo para migrar cuadros antiguos.
@@ -78,6 +113,42 @@ data class DashboardWidget(
     }
     val hasCustomScale: Boolean get() = scaleMin != null && scaleMax != null && scaleMin.isFinite() && scaleMax.isFinite() && scaleMin < scaleMax && (scaleMax - scaleMin).isFinite()
     fun scale(pid: ObdPid?): Pair<Float, Float> = if (hasCustomScale) scaleMin!! to scaleMax!! else (pid?.minValue ?: 0f) to (pid?.maxValue ?: 100f)
+
+    val localizedTitle: String
+        get() = defaultTitlePairs
+            .firstOrNull { (es, en) -> AppLanguage.entries.any { lang -> tr(es, en, lang) == title } }
+            ?.let { (es, en) -> tr(es, en) }
+            ?: title
+
+    companion object {
+        private val defaultTitlePairs = listOf(
+            "Revoluciones" to "Engine RPM",
+            "Velocidad" to "Speed",
+            "Refrigerante" to "Coolant",
+            "Voltaje ECU" to "ECU Voltage",
+            "Presión DPF" to "DPF Pressure",
+            "Temp. Escape EGT" to "Exhaust Temp EGT",
+            "Temp. Refrigerante" to "Coolant Temp",
+            "Carga Motor" to "Engine Load",
+            "MAP absoluta" to "Absolute MAP",
+            "Flujo Aire MAF" to "MAF Air Flow",
+            "Temp. Admisión" to "Intake Temp",
+            "Tacómetro Motor" to "Engine Tachometer",
+            "Consumo Instantáneo" to "Instant Fuel Rate",
+            "Nivel de Depósito" to "Fuel Tank Level",
+            "Voltaje Batería" to "Battery Voltage",
+            "Presión Dif. DPF B1" to "DPF Diff. Pressure B1",
+            "Temp. EGT B1 S1" to "EGT Temp B1 S1",
+            "Temp. Entrada DPF" to "DPF Inlet Temp",
+            "Presión Rail" to "Rail Pressure",
+            "Temp. Aceite Motor" to "Engine Oil Temp",
+            "Temp. Ambiente" to "Ambient Temp",
+            "Corrección Corta B1" to "Short Fuel Trim B1",
+            "Corrección Larga B1" to "Long Fuel Trim B1",
+            "Avance Encendido" to "Timing Advance",
+            "Equivalencia Lambda" to "Commanded Equiv. Ratio"
+        )
+    }
 }
 
 data class CustomDashboardConfig(
@@ -89,6 +160,15 @@ data class CustomDashboardConfig(
     val density: DashboardDensity = DashboardDensity.COMFORTABLE,
     val carGridLayout: DashboardGridLayout? = null
 ) {
+    val localizedName: String
+        get() = listOf(
+            "Mi dash" to "My dash",
+            "Mi Dashboard Personalizado" to "My Custom Dashboard",
+            "Principal" to "Main"
+        ).firstOrNull { (es, en) -> AppLanguage.entries.any { lang -> tr(es, en, lang) == name } }
+            ?.let { (es, en) -> tr(es, en) }
+            ?: name
+
     /** Presentación del coche independiente; las ranuras ocultas siguen guardadas para el móvil. */
     fun forCar(): CustomDashboardConfig = copy(gridLayout = (carGridLayout ?: gridLayout).forCar())
 
@@ -139,10 +219,10 @@ data class CustomDashboardConfig(
 
     companion object {
         fun getDefaultWidgets(): List<DashboardWidget> = listOf(
-            DashboardWidget(pidId = SensorIds.RPM, pidShortName = "RPM", title = "Revoluciones"),
-            DashboardWidget(pidId = SensorIds.SPEED, pidShortName = "Velocidad", title = "Velocidad", colorHex = "#00E5FF"),
-            DashboardWidget(pidId = SensorIds.COOLANT, pidShortName = "Temp Liq", title = "Refrigerante", colorHex = "#00E676"),
-            DashboardWidget(pidId = SensorIds.VOLTAGE, pidShortName = "Voltaje", title = "Voltaje ECU", colorHex = "#FFD600")
+            DashboardWidget(pidId = SensorIds.RPM, pidShortName = "RPM", title = tr("Revoluciones", "Engine RPM")),
+            DashboardWidget(pidId = SensorIds.SPEED, pidShortName = "Velocidad", title = tr("Velocidad", "Speed"), colorHex = "#00E5FF"),
+            DashboardWidget(pidId = SensorIds.COOLANT, pidShortName = "Temp Liq", title = tr("Refrigerante", "Coolant"), colorHex = "#00E676"),
+            DashboardWidget(pidId = SensorIds.VOLTAGE, pidShortName = "Voltaje", title = tr("Voltaje ECU", "ECU Voltage"), colorHex = "#FFD600")
         )
     }
 }
@@ -160,57 +240,96 @@ object DashboardPresets {
     fun getAllPresets(): List<DashboardPreset> = listOf(
         DashboardPreset(
             id = "sport",
-            title = "Conducción",
-            subtitle = "RPM, velocidad, refrigerante y voltaje ECU",
+            title = tr("Conducción", "Driving"),
+            subtitle = tr("RPM, velocidad, refrigerante y voltaje ECU", "RPM, speed, coolant and ECU voltage"),
             iconEmoji = "🏁",
             gridLayout = DashboardGridLayout.GRID_1X4,
             widgets = CustomDashboardConfig.getDefaultWidgets()
         ),
         DashboardPreset(
             id = "default",
-            title = "Predeterminado Completo",
-            subtitle = "Cuatro lecturas básicas para conducir",
+            title = tr("Predeterminado Completo", "Full Default"),
+            subtitle = tr("Cuatro lecturas básicas para conducir", "Four essential driving readings"),
             iconEmoji = "⚙️",
             gridLayout = DashboardGridLayout.GRID_2X2,
             widgets = CustomDashboardConfig.getDefaultWidgets()
         ),
         DashboardPreset(
             id = "diesel_dpf",
-            title = "Diésel & Filtro DPF",
-            subtitle = "Presión diferencial DPF, EGT, Refrigerante y Carga",
+            title = tr("Diésel & Filtro DPF", "Diesel & DPF Filter"),
+            subtitle = tr("Presión diferencial DPF, EGT, Refrigerante y Carga", "DPF differential pressure, EGT, Coolant and Load"),
             iconEmoji = "🛢️",
             gridLayout = DashboardGridLayout.GRID_1X4,
             widgets = listOf(
-                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "DPF diff.pres", title = "Presión DPF", colorHex = "#00E676"),
-                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "EGT", title = "Temp. Escape EGT", colorHex = "#FF1744"),
-                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "Temp Liq", title = "Temp. Refrigerante", colorHex = "#00E5FF"),
-                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "Carga", title = "Carga Motor", colorHex = "#FF6D00")
+                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "DPF diff.pres", title = tr("Presión DPF", "DPF Pressure"), colorHex = "#00E676"),
+                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "EGT", title = tr("Temp. Escape EGT", "Exhaust Temp EGT"), colorHex = "#FF1744"),
+                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "Temp Liq", title = tr("Temp. Refrigerante", "Coolant Temp"), colorHex = "#00E5FF"),
+                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "Carga", title = tr("Carga Motor", "Engine Load"), colorHex = "#FF6D00")
             )
         ),
         DashboardPreset(
             id = "turbo_intake",
-            title = "Turbo y Admisión",
-            subtitle = "Presión MAP, Flujo MAF, Temp Admisión y RPM",
+            title = tr("Turbo y Admisión", "Turbo & Intake"),
+            subtitle = tr("Presión MAP, Flujo MAF, Temp Admisión y RPM", "MAP pressure, MAF flow, Intake Temp and RPM"),
             iconEmoji = "💨",
             gridLayout = DashboardGridLayout.GRID_1X4,
             widgets = listOf(
-                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "MAP", title = "MAP absoluta", colorHex = "#FF6D00"),
-                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "MAF", title = "Flujo Aire MAF", colorHex = "#00E5FF"),
-                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "Temp Adm", title = "Temp. Admisión", colorHex = "#00E676"),
-                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "RPM", title = "Tacómetro Motor", colorHex = "#FF1744")
+                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "MAP", title = tr("MAP absoluta", "Absolute MAP"), colorHex = "#FF6D00"),
+                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "MAF", title = tr("Flujo Aire MAF", "MAF Air Flow"), colorHex = "#00E5FF"),
+                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "Temp Adm", title = tr("Temp. Admisión", "Intake Temp"), colorHex = "#00E676"),
+                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "RPM", title = tr("Tacómetro Motor", "Engine Tachometer"), colorHex = "#FF1744")
             )
         ),
         DashboardPreset(
             id = "eco_trip",
-            title = "Viaje y Eficiencia",
-            subtitle = "Velocímetro digital, Consumo L/h, Depósito y Batería",
+            title = tr("Viaje y Eficiencia", "Trip & Efficiency"),
+            subtitle = tr("Velocímetro digital, Consumo L/h, Depósito y Batería", "Digital speedometer, Fuel rate L/h, Tank and Battery"),
             iconEmoji = "🚗",
             gridLayout = DashboardGridLayout.GRID_2X2,
             widgets = listOf(
-                DashboardWidget(type = WidgetType.DIGITAL_HUD, pidShortName = "Velocidad", title = "Velocidad", colorHex = "#00E5FF"),
-                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "Consumo", title = "Consumo Instantáneo", colorHex = "#FF6D00"),
-                DashboardWidget(type = WidgetType.HORIZONTAL_BAR, pidShortName = "Nivel Dep", title = "Nivel de Depósito", colorHex = "#00E676"),
-                DashboardWidget(type = WidgetType.COMPACT_TILE, pidShortName = "Voltaje", title = "Voltaje Batería", colorHex = "#FFD600")
+                DashboardWidget(type = WidgetType.DIGITAL_HUD, pidShortName = "Velocidad", title = tr("Velocidad", "Speed"), colorHex = "#00E5FF"),
+                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "Consumo", title = tr("Consumo Instantáneo", "Instant Fuel Rate"), colorHex = "#FF6D00"),
+                DashboardWidget(type = WidgetType.HORIZONTAL_BAR, pidShortName = "Nivel Dep", title = tr("Nivel de Depósito", "Fuel Tank Level"), colorHex = "#00E676"),
+                DashboardWidget(type = WidgetType.COMPACT_TILE, pidShortName = "Voltaje", title = tr("Voltaje Batería", "Battery Voltage"), colorHex = "#FFD600")
+            )
+        ),
+        DashboardPreset(
+            id = "diesel_sae",
+            title = tr("Diésel & DPF (OBD Estándar)", "Diesel & DPF (Standard OBD)"),
+            subtitle = tr("Presión dif. DPF, EGT B1 S1, Temp. DPF y Rail diésel", "DPF diff. pressure, EGT B1 S1, DPF Temp and Diesel Rail"),
+            iconEmoji = "♻️",
+            gridLayout = DashboardGridLayout.GRID_2X2,
+            widgets = listOf(
+                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "DPF B1 dif. pres", title = tr("Presión Dif. DPF B1", "DPF Diff. Pressure B1"), colorHex = "#00E676"),
+                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "EGT B1 S1", title = tr("Temp. EGT B1 S1", "EGT Temp B1 S1"), colorHex = "#FF1744"),
+                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "Temp DPF B1 ent", title = tr("Temp. Entrada DPF", "DPF Inlet Temp"), colorHex = "#FF6D00"),
+                DashboardWidget(type = WidgetType.DIGITAL_HUD, pidShortName = "Rail diésel", title = tr("Presión Rail", "Rail Pressure"), colorHex = "#00E5FF")
+            )
+        ),
+        DashboardPreset(
+            id = "thermal_control",
+            title = tr("Control Térmico", "Thermal Control"),
+            subtitle = tr("Refrigerante, Aceite Motor, Admisión y Ambiente", "Coolant, Engine Oil, Intake and Ambient"),
+            iconEmoji = "🌡️",
+            gridLayout = DashboardGridLayout.GRID_2X2,
+            widgets = listOf(
+                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "Temp Liq", title = tr("Temp. Refrigerante", "Coolant Temp"), colorHex = "#00E5FF"),
+                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "Temp aceite", title = tr("Temp. Aceite Motor", "Engine Oil Temp"), colorHex = "#FF6D00"),
+                DashboardWidget(type = WidgetType.COMPACT_TILE, pidShortName = "Temp Adm", title = tr("Temp. Admisión", "Intake Temp"), colorHex = "#00E676"),
+                DashboardWidget(type = WidgetType.COMPACT_TILE, pidShortName = "Temp ambiente", title = tr("Temp. Ambiente", "Ambient Temp"), colorHex = "#FFD600")
+            )
+        ),
+        DashboardPreset(
+            id = "fuel_injection",
+            title = tr("Inyección y Mezcla", "Injection & Mixture"),
+            subtitle = tr("Correcciones STFT/LTFT B1, Avance y Presión Rail", "STFT/LTFT B1 trims, Timing Advance and Lambda"),
+            iconEmoji = "⛽",
+            gridLayout = DashboardGridLayout.GRID_2X2,
+            widgets = listOf(
+                DashboardWidget(type = WidgetType.HORIZONTAL_BAR, pidShortName = "STFT B1", title = tr("Corrección Corta B1", "Short Fuel Trim B1"), colorHex = "#00E5FF"),
+                DashboardWidget(type = WidgetType.HORIZONTAL_BAR, pidShortName = "LTFT B1", title = tr("Corrección Larga B1", "Long Fuel Trim B1"), colorHex = "#00E676"),
+                DashboardWidget(type = WidgetType.ANALOG_GAUGE, pidShortName = "Avance encendido", title = tr("Avance Encendido", "Timing Advance"), colorHex = "#FF6D00"),
+                DashboardWidget(type = WidgetType.COMPACT_TILE, pidShortName = "Equiv objetivo", title = tr("Equivalencia Lambda", "Commanded Equiv. Ratio"), colorHex = "#FFD600")
             )
         )
     )
@@ -220,9 +339,12 @@ object DashboardPresets {
                 ?.let { widget.copy(pidId = it.id) }
         }
         if (widgets.isEmpty()) null else preset.copy(widgets = widgets,
-            subtitle = "${widgets.size} sensores · " +
-                if (widgets.all { widget -> pids.single { it.id == widget.pidId }.supportChecked }) "Compatibles con la ECU"
-                else "Compatibilidad por comprobar")
+            subtitle = tr("${widgets.size} sensores · ", "${widgets.size} sensors · ") +
+                if (widgets.all { widget -> pids.single { it.id == widget.pidId }.supportChecked }) {
+                    tr("Compatibles con la ECU", "Compatible with ECU")
+                } else {
+                    tr("Compatibilidad por comprobar", "Compatibility unverified")
+                })
     }
 
 }
@@ -230,7 +352,7 @@ object DashboardPresets {
 
 /** El orden y la selección usan identidades estables, independientes del nombre. */
 data class CustomDashboardTabs(
-    val dashboards: List<CustomDashboardConfig> = listOf(CustomDashboardConfig(name = "Mi dash")),
+    val dashboards: List<CustomDashboardConfig> = listOf(CustomDashboardConfig(name = tr("Mi dash", "My dash"))),
     val selectedId: String = dashboards.first().id
 ) {
     init {
@@ -264,7 +386,7 @@ data class CustomDashboardTabs(
 
     fun duplicate(id: String): CustomDashboardTabs {
         val original = dashboards.firstOrNull { it.id == id } ?: return this
-        val duplicated = original.duplicateAs("${original.name.take(72)} · Copia")
+        val duplicated = original.duplicateAs("${original.name.take(72)} · ${tr("Copia", "Copy")}")
         val updated = dashboards.toMutableList().apply { add(dashboards.indexOf(original) + 1, duplicated) }
         return copy(dashboards = updated, selectedId = duplicated.id)
     }

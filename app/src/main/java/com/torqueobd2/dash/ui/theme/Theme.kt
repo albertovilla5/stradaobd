@@ -40,11 +40,17 @@ private val DarkColorScheme = darkColorScheme(
 fun TorqueDashboardTheme(
     carMode: Boolean = true,
     onCarModeChanged: (Boolean) -> Unit = {},
+    languagePreference: com.torqueobd2.dash.i18n.AppLanguagePreference = com.torqueobd2.dash.i18n.AppI18n.currentPreference,
+    onLanguagePreferenceChanged: (com.torqueobd2.dash.i18n.AppLanguagePreference) -> Unit = {},
     content: @Composable () -> Unit
 ) {
+    val activeLanguage = com.torqueobd2.dash.i18n.AppI18n.currentLanguage
     CompositionLocalProvider(
         LocalCarMode provides carMode,
         LocalOnCarModeChanged provides onCarModeChanged,
+        com.torqueobd2.dash.i18n.LocalAppLanguage provides activeLanguage,
+        com.torqueobd2.dash.i18n.LocalAppLanguagePreference provides languagePreference,
+        com.torqueobd2.dash.i18n.LocalOnAppLanguagePreferenceChanged provides onLanguagePreferenceChanged,
         LocalMinimumInteractiveComponentSize provides if (carMode) 76.dp else 48.dp
     ) {
         MaterialTheme(

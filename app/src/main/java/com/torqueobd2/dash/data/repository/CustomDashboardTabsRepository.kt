@@ -2,15 +2,17 @@ package com.torqueobd2.dash.data.repository
 
 import android.content.SharedPreferences
 import com.torqueobd2.dash.data.model.*
+import com.torqueobd2.dash.i18n.tr
 
 /** Una escritura conjunta conserva pestañas, selección, rejillas y ranuras entre sesiones. */
 class CustomDashboardTabsRepository(private val prefs: SharedPreferences) {
     fun load(legacyDashboard: () -> CustomDashboardConfig): CustomDashboardTabs {
+        val defaultTabName = tr("Mi dash", "My dash")
         val count = prefs.getInt("dash_tabs_count", 0)
         val dashboards = (0 until count).mapNotNull { index ->
             val key = "dash_tab_${index}_"
             val id = prefs.getString(key + "id", null)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            val name = prefs.getString(key + "name", "Mi dash") ?: "Mi dash"
+            val name = prefs.getString(key + "name", defaultTabName) ?: defaultTabName
             val layout = DashboardGridLayout.entries.find { it.id == prefs.getString(key + "grid", null) }
                 ?: DashboardGridLayout.GRID_1X4
             val slots = mutableMapOf<Int, DashboardWidget>()
@@ -37,7 +39,7 @@ class CustomDashboardTabsRepository(private val prefs: SharedPreferences) {
         if (dashboards.isEmpty()) {
             val legacy = legacyDashboard()
             val migrated = legacy.copy(
-                name = if (legacy.name == "Mi Dashboard Personalizado") "Mi dash" else legacy.name,
+                name = if (legacy.name == "Mi Dashboard Personalizado" || legacy.name == "My Custom Dashboard") defaultTabName else legacy.name,
                 slots = legacy.resolvedSlots(), widgets = emptyList()
             )
             return CustomDashboardTabs(listOf(migrated)).also(::save)

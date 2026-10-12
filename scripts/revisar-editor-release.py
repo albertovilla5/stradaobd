@@ -14,7 +14,7 @@ parser.add_argument('--serial', default='emulator-5554')
 args = parser.parse_args()
 if not args.serial.startswith('emulator-'): raise SystemExit('Solo emuladores de desarrollo')
 ADB = [str(pathlib.Path.home()/'Library/Android/sdk/platform-tools/adb'), '-s', args.serial]
-PACKAGE = 'com.torqueobd2.dash'
+PACKAGE = 'com.stradaobd.dash'
 DEBUG = ROOT/'app/build/outputs/apk/debug/app-debug.apk'
 RELEASE = ROOT/'app/build/outputs/apk/release/app-release.apk'
 OUT = ROOT/'build/editor-expanded/release'

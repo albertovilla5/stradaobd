@@ -1,5 +1,7 @@
 package com.torqueobd2.dash.data.model
 
+import com.torqueobd2.dash.i18n.tr
+
 data class RecordingContext(
     val vehicleId: String,
     val vehicleName: String,
@@ -8,8 +10,15 @@ data class RecordingContext(
     val adapterAddress: String
 )
 
-enum class RecordingEnd(val label: String) {
-    COMPLETED("Finalizada"), INTERRUPTED("Interrumpida"), ERROR("Error")
+enum class RecordingEnd {
+    COMPLETED, INTERRUPTED, ERROR;
+
+    val label: String
+        get() = when (this) {
+            COMPLETED -> tr("Finalizada", "Completed")
+            INTERRUPTED -> tr("Interrumpida", "Interrupted")
+            ERROR -> tr("Error", "Error")
+        }
 }
 
 data class RecordingSession(

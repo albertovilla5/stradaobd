@@ -1,6 +1,7 @@
 package com.torqueobd2.dash.data.parser
 
 import com.torqueobd2.dash.data.model.*
+import com.torqueobd2.dash.i18n.tr
 
 /** Reensambla mensajes por ECU; nunca concatena respuestas de módulos distintos. */
 object DiagnosticResponseParser {
@@ -23,43 +24,44 @@ object DiagnosticResponseParser {
                 bytes.size == 3 && bytes[0] == 0x7F && bytes[1] == mode -> {
                     val status = if (bytes[2] in listOf(0x11, 0x12, 0x31)) DiagnosticStatus.UNSUPPORTED else DiagnosticStatus.NO_DATA
                     negative = status
-                    issues.add("ECU $ecu: respuesta negativa ${bytes.joinToString(" ") { "%02X".format(it) }}")
+                    val hexBytes = bytes.joinToString(" ") { "%02X".format(it) }
+                    issues.add(tr("ECU $ecu: respuesta negativa $hexBytes", "ECU $ecu: negative response $hexBytes"))
                 }
-                else -> issues.add("ECU $ecu: respuesta ajena al comando o incompleta")
+                else -> issues.add(tr("ECU $ecu: respuesta ajena al comando o incompleta", "ECU $ecu: unrelated or incomplete command response"))
             }
         }
         fun finishIndexed() {
             indexed?.let { bytes ->
-                if (indexedLength != null && bytes.size != indexedLength) issues.add("Respuesta indexada truncada")
-                else add("Sin identificar", bytes, canProtocol)
+                if (indexedLength != null && bytes.size != indexedLength) issues.add(tr("Respuesta indexada truncada", "Truncated indexed response"))
+                else add(tr("Sin identificar", "Unidentified"), bytes, canProtocol)
             }
             indexed = null; indexedLength = null; nextIndex = 0
         }
         fun canFrame(ecu: String, bytes: List<Int>) {
-            if (bytes.isEmpty()) { issues.add("ECU $ecu: trama vacía"); return }
+            if (bytes.isEmpty()) { issues.add(tr("ECU $ecu: trama vacía", "ECU $ecu: empty frame")); return }
             when (bytes[0] shr 4) {
                 0 -> {
-                    if (pending.remove(ecu) != null) issues.add("ECU $ecu: mensaje previo truncado")
+                    if (pending.remove(ecu) != null) issues.add(tr("ECU $ecu: mensaje previo truncado", "ECU $ecu: previous message truncated"))
                     val length = bytes[0] and 0xF
-                    if (length !in 1..7 || bytes.size < length + 1) issues.add("ECU $ecu: longitud CAN inválida")
+                    if (length !in 1..7 || bytes.size < length + 1) issues.add(tr("ECU $ecu: longitud CAN inválida", "ECU $ecu: invalid CAN length"))
                     else add(ecu, bytes.drop(1).take(length), true)
                 }
                 1 -> {
-                    if (pending.remove(ecu) != null) issues.add("ECU $ecu: primer segmento repetido")
-                    if (bytes.size < 3) { issues.add("ECU $ecu: primer segmento truncado"); return }
+                    if (pending.remove(ecu) != null) issues.add(tr("ECU $ecu: primer segmento repetido", "ECU $ecu: repeated first frame"))
+                    if (bytes.size < 3) { issues.add(tr("ECU $ecu: primer segmento truncado", "ECU $ecu: truncated first frame")); return }
                     val length = ((bytes[0] and 15) shl 8) or bytes[1]
-                    if (length !in 8..4095 || bytes.size != 8) { issues.add("ECU $ecu: longitud multitrama inválida"); return }
+                    if (length !in 8..4095 || bytes.size != 8) { issues.add(tr("ECU $ecu: longitud multitrama inválida", "ECU $ecu: invalid multi-frame length")); return }
                     pending[ecu] = Pending(length, bytes.drop(2).toMutableList())
                 }
                 2 -> {
                     val message = pending[ecu]
                     if (message == null || bytes[0] and 15 != message.sequence || bytes.size < 2) {
-                        pending.remove(ecu); issues.add("ECU $ecu: secuencia CAN incompleta o desordenada"); return
+                        pending.remove(ecu); issues.add(tr("ECU $ecu: secuencia CAN incompleta o desordenada", "ECU $ecu: incomplete or out-of-order CAN sequence")); return
                     }
                     message.sequence = (message.sequence + 1) and 15
                     val remaining = message.length - message.bytes.size
                     if (bytes.size - 1 < minOf(remaining, 7)) {
-                        pending.remove(ecu); issues.add("ECU $ecu: segmento CAN truncado"); return
+                        pending.remove(ecu); issues.add(tr("ECU $ecu: segmento CAN truncado", "ECU $ecu: truncated CAN segment")); return
                     }
                     message.bytes.addAll(bytes.drop(1).take(remaining))
                     if (message.bytes.size >= message.length) { pending.remove(ecu); add(ecu, message.bytes, true) }
@@ -67,14 +69,14 @@ object DiagnosticResponseParser {
                 else -> {
                     // Algunos adaptadores eliminan PCI incluso con ATH1 y CAF1.
                     if (bytes[0] == positive || bytes[0] == 0x7F) add(ecu, bytes, true)
-                    else issues.add("ECU $ecu: tipo de trama CAN no reconocido")
+                    else issues.add(tr("ECU $ecu: tipo de trama CAN no reconocido", "ECU $ecu: unrecognized CAN frame type"))
                 }
             }
         }
         fun bytes(hex: String): List<Int>? = if (hex.isNotEmpty() && hex.length % 2 == 0 && hex.matches(Regex("[0-9A-F]+")))
             hex.chunked(2).map { it.toInt(16) } else null
 
-        if (raw.length > 100_000) return DiagnosticReply(DiagnosticStatus.INVALID, issues = listOf("Respuesta demasiado larga"))
+        if (raw.length > 100_000) return DiagnosticReply(DiagnosticStatus.INVALID, issues = listOf(tr("Respuesta demasiado larga", "Response too long")))
         val lines = raw.replace(">", "").replace("SEARCHING...", "", true).replace("SEARCHING", "", true)
             .split(Regex("[\\r\\n]+"))
         for (line in lines) {
@@ -91,7 +93,7 @@ object DiagnosticResponseParser {
                 if (number == 0) { if (indexed != null) finishIndexed(); indexed = mutableListOf(); nextIndex = 0 }
                 val data = bytes(index.groupValues[2].replace(Regex("\\s"), ""))
                 if (indexed == null || number != nextIndex++ || data == null) {
-                    indexed = null; indexedLength = null; issues.add("Secuencia indexada inválida")
+                    indexed = null; indexedLength = null; issues.add(tr("Secuencia indexada inválida", "Invalid indexed sequence"))
                 } else indexed!!.addAll(data)
                 continue
             }
@@ -103,7 +105,7 @@ object DiagnosticResponseParser {
             // ATH0 se acepta sin asignar falsamente una dirección de ECU.
             if (compact.startsWith("%02X".format(positive)) || compact.startsWith("7F")) {
                 val payload = bytes(compact)
-                if (payload == null) issues.add("Respuesta sin cabecera inválida") else add("Sin identificar", payload, canProtocol)
+                if (payload == null) issues.add(tr("Respuesta sin cabecera inválida", "Invalid headerless response")) else add(tr("Sin identificar", "Unidentified"), payload, canProtocol)
                 continue
             }
             // Protocolos J1850/ISO9141/KWP: tres bytes de cabecera y checksum final.
@@ -115,8 +117,9 @@ object DiagnosticResponseParser {
                 val explicitLength = legacy[0] and 0x3F == 0 && legacy[3] != positive && legacy[3] != 0x7F
                 val start = if (explicitLength) 4 else 3
                 val payload = legacy.subList(start, legacy.lastIndex)
-                if (explicitLength && legacy[3] != payload.size) issues.add("ECU %02X: longitud KWP inválida".format(legacy[2]))
-                else add("%02X".format(legacy[2]), payload, false)
+                val ecuHex = "%02X".format(legacy[2])
+                if (explicitLength && legacy[3] != payload.size) issues.add(tr("ECU $ecuHex: longitud KWP inválida", "ECU $ecuHex: invalid KWP length"))
+                else add(ecuHex, payload, false)
                 continue
             }
             val headerLength = when {
@@ -126,20 +129,20 @@ object DiagnosticResponseParser {
                 compact.length >= 10 && compact.take(8).toLongOrNull(16)?.let { it <= 0x1FFFFFFF } == true -> 8
                 else -> 0
             }
-            if (headerLength == 0) { issues.add("Cabecera o formato no reconocido: $text"); continue }
+            if (headerLength == 0) { issues.add(tr("Cabecera o formato no reconocido: $text", "Unrecognized header or format: $text")); continue }
             val ecu = compact.take(headerLength)
             var data = compact.drop(headerLength)
             if (data.length % 2 == 1) {
                 val dlc = data.take(1).toIntOrNull(16)
                 data = data.drop(1)
-                if (dlc == null || dlc !in 1..8 || dlc * 2 != data.length) { issues.add("ECU $ecu: DLC inválido"); continue }
+                if (dlc == null || dlc !in 1..8 || dlc * 2 != data.length) { issues.add(tr("ECU $ecu: DLC inválido", "ECU $ecu: invalid DLC")); continue }
             }
             val payload = bytes(data)
-            if (payload == null || payload.size > 8 && payload.firstOrNull()?.let { it != positive } == true) issues.add("ECU $ecu: bytes CAN inválidos")
+            if (payload == null || payload.size > 8 && payload.firstOrNull()?.let { it != positive } == true) issues.add(tr("ECU $ecu: bytes CAN inválidos", "ECU $ecu: invalid CAN bytes"))
             else canFrame(ecu, payload ?: emptyList())
         }
         finishIndexed()
-        pending.keys.forEach { issues.add("ECU $it: respuesta multitrama truncada") }
+        pending.keys.forEach { issues.add(tr("ECU $it: respuesta multitrama truncada", "ECU $it: truncated multi-frame response")) }
         val status = when {
             frames.isNotEmpty() -> if (issues.isEmpty() && !noData) DiagnosticStatus.OK else DiagnosticStatus.PARTIAL
             negative != null -> negative!!
@@ -165,15 +168,15 @@ object DiagnosticResponseParser {
             val pairs = if (counted) {
                 val count = data.firstOrNull()
                 if (count == null || data.size < 1 + count * 2 || data.drop(1 + count * 2).any { it != 0 }) {
-                    issues.add("ECU ${frame.ecu}: número de DTC o longitud inválidos"); return@forEach
+                    issues.add(tr("ECU ${frame.ecu}: número de DTC o longitud inválidos", "ECU ${frame.ecu}: invalid DTC count or length")); return@forEach
                 }
                 data.drop(1).take(count * 2)
             } else {
-                if (data.isEmpty() || data.size % 2 != 0) { issues.add("ECU ${frame.ecu}: pares DTC incompletos"); return@forEach }
+                if (data.isEmpty() || data.size % 2 != 0) { issues.add(tr("ECU ${frame.ecu}: pares DTC incompletos", "ECU ${frame.ecu}: incomplete DTC pairs")); return@forEach }
                 data
             }
             val decoded = pairs.chunked(2).mapNotNull { decodeCode(it[0], it[1]) }
-            if (counted && decoded.size != data[0]) { issues.add("ECU ${frame.ecu}: contador DTC inconsistente"); return@forEach }
+            if (counted && decoded.size != data[0]) { issues.add(tr("ECU ${frame.ecu}: contador DTC inconsistente", "ECU ${frame.ecu}: inconsistent DTC count")); return@forEach }
             ecus.add(frame.ecu)
             decoded.forEach { codes.add(TroubleCode(it, frame.ecu, kind)) }
         }

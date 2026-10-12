@@ -10,6 +10,10 @@
 local.properties
 app/build/
 *.apk
+*.aab
+*.jks
+*.keystore
+keystore.properties
 .kotlin/
 __pycache__/
 *.py[cod]

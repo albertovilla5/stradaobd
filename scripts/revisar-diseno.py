@@ -117,14 +117,14 @@ def navigate(title):
 
 def configure(name):
     w, h, density, rotation, font = SCENES[name]
-    run('shell', 'am', 'force-stop', 'com.torqueobd2.dash')
+    run('shell', 'am', 'force-stop', 'com.stradaobd.dash')
     run('shell', 'wm', 'size', f'{w}x{h}')
     run('shell', 'wm', 'density', str(density))
     run('shell', 'settings', 'put', 'system', 'font_scale', str(font))
     run('shell', 'settings', 'put', 'system', 'accelerometer_rotation', '0')
     run('shell', 'settings', 'put', 'system', 'user_rotation', str(rotation))
     run('shell', 'wm', 'user-rotation', 'lock', str(rotation))
-    run('shell', 'am', 'start', '-W', '-n', 'com.torqueobd2.dash/.MainActivity')
+    run('shell', 'am', 'start', '-W', '-n', 'com.stradaobd.dash/.MainActivity')
     expected = (h, w) if rotation % 2 else (w, h)
     for attempt in range(4):
         run('shell', 'wm', 'user-rotation', 'lock', str(rotation))
@@ -152,7 +152,7 @@ def capture(scene, name):
     (target / (name + '.xml')).write_text(xml)
     (target / (name + '.png')).write_bytes(pixels)
     readings = [{'text': n.get('text'), 'bounds': rect(n)} for n in nodes if n.get('text') and positive(rect(n))]
-    if not run('shell', 'pidof', 'com.torqueobd2.dash').strip():
+    if not run('shell', 'pidof', 'com.stradaobd.dash').strip():
         raise AssertionError('App process stopped')
     result = {'scene': scene, 'screen': name, 'width': width, 'height': height, 'readings': readings}
     (target / (name + '.json')).write_text(json.dumps(result, indent=2, ensure_ascii=False))
@@ -160,7 +160,7 @@ def capture(scene, name):
     return result
 
 if args.action == 'matrix':
-    run('shell', 'am', 'force-stop', 'com.torqueobd2.dash')
+    run('shell', 'am', 'force-stop', 'com.stradaobd.dash')
     results = []
     for scene in args.scenes or SCENES:
         configure(scene)

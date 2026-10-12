@@ -14,8 +14,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -37,7 +40,7 @@ fun RacingPanel(modifier: Modifier = Modifier, padding: Dp = 14.dp, content: @Co
 }
 
 @Composable
-fun RacingHeader(title: String, subtitle: String, modifier: Modifier = Modifier, eyebrow: String = "TORQUE / TELEMETRÍA") {
+fun RacingHeader(title: String, subtitle: String, modifier: Modifier = Modifier, eyebrow: String = com.torqueobd2.dash.i18n.tr("STRADA / TELEMETRÍA", "STRADA / TELEMETRY")) {
     Column(modifier.fillMaxWidth()) {
         Text(eyebrow, color = RacingOrange, fontSize = 10.sp, letterSpacing = 1.8.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
@@ -101,10 +104,85 @@ fun TelemetryTrack(progress: Float, color: Color, modifier: Modifier = Modifier)
 @Composable
 fun RacingMark(modifier: Modifier = Modifier) {
     Canvas(modifier) {
-        for (i in 0..2) {
-            val x = size.width * (0.16f + i * 0.27f)
-            drawLine(if (i == 2) TextWhite else RacingOrange, Offset(x, size.height * 0.85f),
-                Offset(x + size.width * 0.2f, size.height * 0.15f), strokeWidth = size.width * 0.12f)
-        }
+        val side = minOf(size.width, size.height)
+        val cx = size.width * 0.5f
+        val cy = size.height * 0.48f
+        val outerR = side * 0.42f
+        val innerR = side * 0.31f
+        val outerStroke = (side * 0.085f).coerceAtLeast(1.6f)
+        val innerStroke = (side * 0.05f).coerceAtLeast(1.1f)
+
+        // Inner cyan telemetry arc
+        drawArc(
+            color = NeonCyan,
+            startAngle = 150f,
+            sweepAngle = 240f,
+            useCenter = false,
+            topLeft = Offset(cx - innerR, cy - innerR),
+            size = Size(innerR * 2f, innerR * 2f),
+            style = Stroke(width = innerStroke, cap = StrokeCap.Round)
+        )
+        // Outer white tachometer arc
+        drawArc(
+            color = TextWhite,
+            startAngle = 145f,
+            sweepAngle = 160f,
+            useCenter = false,
+            topLeft = Offset(cx - outerR, cy - outerR),
+            size = Size(outerR * 2f, outerR * 2f),
+            style = Stroke(width = outerStroke, cap = StrokeCap.Butt)
+        )
+        // Redline orange arc
+        drawArc(
+            color = RacingOrange,
+            startAngle = 305f,
+            sweepAngle = 90f,
+            useCenter = false,
+            topLeft = Offset(cx - outerR, cy - outerR),
+            size = Size(outerR * 2f, outerR * 2f),
+            style = Stroke(width = outerStroke * 1.12f, cap = StrokeCap.Butt)
+        )
+        // Perspective road rails ('Strada')
+        val roadTopY = cy + side * 0.11f
+        val roadBottomY = cy + side * 0.46f
+        drawLine(
+            color = TextWhite,
+            start = Offset(cx - side * 0.09f, roadTopY),
+            end = Offset(cx - side * 0.28f, roadBottomY),
+            strokeWidth = innerStroke * 1.15f,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = TextWhite,
+            start = Offset(cx + side * 0.09f, roadTopY),
+            end = Offset(cx + side * 0.28f, roadBottomY),
+            strokeWidth = innerStroke * 1.15f,
+            cap = StrokeCap.Round
+        )
+        // Dashed orange road centerline
+        drawLine(
+            color = RacingOrange,
+            start = Offset(cx, roadTopY + side * 0.02f),
+            end = Offset(cx, roadTopY + side * 0.14f),
+            strokeWidth = innerStroke * 1.1f,
+            cap = StrokeCap.Round
+        )
+        drawLine(
+            color = RacingOrange,
+            start = Offset(cx, roadTopY + side * 0.22f),
+            end = Offset(cx, roadBottomY),
+            strokeWidth = innerStroke * 1.3f,
+            cap = StrokeCap.Round
+        )
+        // Tachometer needle pointing to upper-right redline apex
+        drawLine(
+            color = RacingOrange,
+            start = Offset(cx - side * 0.07f, cy + side * 0.05f),
+            end = Offset(cx + outerR * 0.78f, cy - outerR * 0.62f),
+            strokeWidth = outerStroke * 0.85f,
+            cap = StrokeCap.Round
+        )
+        drawCircle(color = RacingOrange, radius = side * 0.075f, center = Offset(cx, cy))
     }
 }
+

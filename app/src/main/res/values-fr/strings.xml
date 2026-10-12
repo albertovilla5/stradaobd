@@ -1,0 +1,29 @@
+<resources>
+    <string name="app_name">StradaOBD</string>
+    <string name="tab_sport">Sport</string>
+    <string name="tab_digital">HUD numérique</string>
+    <string name="tab_custom">Sur mesure</string>
+    <string name="tab_vehicle">Véhicule</string>
+    <string name="tab_grid">Capteurs</string>
+    <string name="tab_settings">Paramètres</string>
+    <string name="tab_dtc">Défauts</string>
+    <string name="tab_connection">Connexion</string>
+    <string name="tab_terminal">Terminal AT</string>
+    <string name="tab_alerts">Alertes</string>
+    <string name="tab_recording">Enregistrement</string>
+    <string name="nav_driving">Conduite</string>
+    <string name="nav_home">Accueil</string>
+    <string name="nav_panels">Tableaux</string>
+    <string name="nav_menu">Menu</string>
+    <string name="back_exit_toast">Appuyez à nouveau pour quitter StradaOBD</string>
+    <string name="settings_language_title">Langue de l\'application</string>
+    <string name="settings_language_subtitle">Choisissez comment la langue des écrans, capteurs et diagnostics est sélectionnée.</string>
+    <string name="settings_language_system">Automatique (langue du système)</string>
+    <string name="settings_display_mode_title">Disposition de l\'écran</string>
+    <string name="settings_display_mode_car">Mode voiture</string>
+    <string name="settings_display_mode_mobile">Mode mobile</string>
+    <string name="notification_channel_name">Lecture OBD et enregistrement</string>
+    <string name="notification_channel_description">Contrôle des sessions de lecture des capteurs en arrière-plan</string>
+    <string name="notification_stop_recording">Arrêter l\'enregistrement</string>
+    <string name="notification_stop_reading">Arrêter la lecture</string>
+</resources>

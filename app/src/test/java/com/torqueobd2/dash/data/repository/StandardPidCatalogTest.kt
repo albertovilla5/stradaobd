@@ -129,4 +129,67 @@ class StandardPidCatalogTest {
         assertEquals("Apagado", reading.copy(value = 0f, decodedValue = 0.0).formatted())
         assertEquals("3.00", reading.copy(value = 3f, decodedValue = 3.0).formatted())
     }
+
+    @Test fun readinessMonitorsSeparateSparkAndCompressionIgnitionCorrectly() {
+        // Spark ignition (B&8 == 0): B=0x07 (continuous supported & complete), C=0x85 (EGR, EVAP, Catalyst supported), D=0x04 (EVAP incomplete)
+        assertEquals(0.0, decode("Tipo monitores ECU", 0x00, 0x07, 0x85, 0x04), 0.0001)
+        assertEquals(0.0, decode("Monitor fallos enc.", 0x00, 0x07, 0x85, 0x04), 0.0001)
+        assertEquals(0.0, decode("Monitor catalizador", 0x00, 0x07, 0x85, 0x04), 0.0001)
+        assertEquals(1.0, decode("Monitor sistema EVAP", 0x00, 0x07, 0x85, 0x04), 0.0001)
+        assertEquals(0.0, decode("Monitor EGR/VVT", 0x00, 0x07, 0x85, 0x04), 0.0001)
+        assertThrows(IllegalArgumentException::class.java) { decode("Monitor filtro DPF", 0x00, 0x07, 0xFF, 0x00) }
+
+        // Compression ignition (B&8 == 8): B=0x0F, C=0x42 (DPF + NOx/SCR supported), D=0x40 (DPF incomplete)
+        assertEquals(1.0, decode("Tipo monitores ECU", 0x00, 0x0F, 0x42, 0x40), 0.0001)
+        assertEquals(0.0, decode("Monitor NOx/SCR", 0x00, 0x0F, 0x42, 0x40), 0.0001)
+        assertEquals(1.0, decode("Monitor filtro DPF", 0x00, 0x0F, 0x42, 0x40), 0.0001)
+        assertThrows(IllegalArgumentException::class.java) { decode("Monitor catalizador", 0x00, 0x0F, 0xFF, 0x00) }
+    }
+
+    @Test fun dieselDpfEgtTurboVgtNoxAndAdBlueDecodeAccurately() {
+        // VGT 0171 skips bit 4 (status bit) for Turbo B just like 0170
+        assertEquals(100.0, decode("VGT A objetivo", 0x01, 255, 0, 0, 0, 0), 0.0001)
+        assertThrows(IllegalArgumentException::class.java) { decode("VGT B objetivo", 0x04, 0, 0, 0, 255, 0) }
+        assertEquals(50.0, decode("VGT B objetivo", 0x08, 0, 0, 0, 128, 0), 0.2)
+
+        // EGT 0178 & 0198
+        assertEquals(600.0, decode("EGT B1 S1", 0x01, 0x19, 0x00), 0.0001)
+        assertEquals(550.0, decode("EGT B1 S5", 0x01, 0x17, 0x0C), 0.0001)
+
+        // DPF 017A (signed differential pressure + unsigned inlet/outlet) & 017C (temps)
+        assertEquals(2.5, decode("DPF B1 dif. pres", 0x01, 0x00, 0xFA), 0.0001)
+        assertEquals(-0.5, decode("DPF B1 dif. pres", 0x01, 0xFF, 0xCE), 0.0001)
+        assertEquals(102.0, decode("DPF B1 pres. ent", 0x02, 0x00, 0x00, 0x27, 0xD8), 0.0001)
+        assertEquals(420.0, decode("Temp DPF B1 ent", 0x01, 0x11, 0xF8), 0.0001)
+
+        // NOx 0183 & AdBlue 0185 / 019B / 01A5
+        assertEquals(120.0, decode("NOx B1 S1", 0x01, 0x00, 0x78), 0.0001)
+        assertEquals(100.0, decode("Nivel AdBlue", 0x04, 0, 0, 0, 0, 255), 0.0001)
+        assertEquals(25.0, decode("Temp AdBlue", 0x01, 65, 0), 0.0001)
+        assertEquals(32.5, decode("Concentración AdBlue", 0x02, 0, 130), 0.0001)
+        assertEquals(16.0, decode("Dosificación AdBlue", 0x01, 32, 0, 0), 0.0001)
+
+        // Actual Gear 01A4 & DPF Regen History 01C6
+        assertEquals(6.0, decode("Marcha actual ECU", 0x01, 0x60, 0, 0), 0.0001)
+        assertEquals(0.85, decode("Relación cambio", 0x02, 0, 0x03, 0x52), 0.0001)
+        assertEquals(540.0, decode("Dist. media regen DPF", 0x04, 0, 0, 0, 0x02, 0x1C, 0, 0), 0.0001)
+    }
+
+    @Test fun manufacturerPacksProvideValidUniquePidsWithoutCollision() {
+        val packs = DefaultPids.getManufacturerPacks()
+        assertTrue(packs.size >= 9)
+        val allPackPids = packs.flatMap { it.pids }
+        assertTrue(allPackPids.size >= 65)
+        assertEquals(allPackPids.size, allPackPids.map { it.id }.toSet().size)
+        assertEquals(allPackPids.size, allPackPids.map { it.shortName }.toSet().size)
+        assertTrue(allPackPids.none { it.id in catalog.map { std -> std.id }.toSet() })
+        assertTrue(allPackPids.all { it.minValue < it.maxValue })
+
+        // Verify every manufacturer PID equation evaluates cleanly on a sample multi-byte payload
+        val sampleVariables = EquationEvaluator.mapBytesToVariables(IntArray(48) { 10 })
+        for (pid in allPackPids) {
+            val valDecoded = PidDecoder.decode(pid, sampleVariables)
+            assertTrue("Decoded value must be finite for ${pid.shortName}", valDecoded.isFinite())
+        }
+    }
 }

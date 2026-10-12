@@ -1,6 +1,7 @@
 package com.torqueobd2.dash.obd
 
 import com.torqueobd2.dash.data.model.ConnectionStatus
+import com.torqueobd2.dash.i18n.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -32,7 +33,7 @@ class WifiObdConnection(
     private val _status = MutableStateFlow(ConnectionStatus.DISCONNECTED)
     override val status: StateFlow<ConnectionStatus> = _status.asStateFlow()
 
-    private val _statusMessage = MutableStateFlow("Desconectado")
+    private val _statusMessage = MutableStateFlow(tr("Desconectado", "Disconnected"))
     override val statusMessage: StateFlow<String> = _statusMessage.asStateFlow()
 
     private var socket: Socket? = null
@@ -41,10 +42,10 @@ class WifiObdConnection(
 
     override suspend fun connect(): Boolean = withContext(Dispatchers.IO) {
         try {
-            require(host.isNotBlank()) { "Indica la dirección IP del adaptador" }
-            require(port in 1..65535) { "El puerto debe estar entre 1 y 65535" }
+            require(host.isNotBlank()) { tr("Indica la dirección IP del adaptador", "Enter the adapter IP address") }
+            require(port in 1..65535) { tr("El puerto debe estar entre 1 y 65535", "Port must be between 1 and 65535") }
             _status.value = ConnectionStatus.CONNECTING
-            _statusMessage.value = "Conectando a $host:$port..."
+            _statusMessage.value = tr("Conectando a $host:$port...", "Connecting to $host:$port...")
 
             val sock = Socket()
             socket = sock
@@ -54,7 +55,7 @@ class WifiObdConnection(
             outputStream = sock.getOutputStream()
 
             _status.value = ConnectionStatus.INITIALIZING_ELM
-            _statusMessage.value = "Configurando ELM327..."
+            _statusMessage.value = tr("Configurando ELM327...", "Configuring ELM327...")
 
             val commands = (defaultInitCommands + initCommands.map { it.trim() }.filter { it.isNotEmpty() }).distinct()
             for (cmd in commands) {
@@ -62,12 +63,17 @@ class WifiObdConnection(
                 val response = sendCommandInternal(cmd, 5000L)
                 onLog?.invoke("WiFi < ${response.trim()}")
                 if (response.contains('?') || response.contains("ERROR", ignoreCase = true)) {
-                    throw IOException("El adaptador rechazó el comando $cmd: ${response.trim()}")
+                    throw IOException(
+                        tr(
+                            "El adaptador rechazó el comando $cmd: ${response.trim()}",
+                            "Adapter rejected command $cmd: ${response.trim()}"
+                        )
+                    )
                 }
             }
 
             _status.value = ConnectionStatus.CONNECTED
-            _statusMessage.value = "Conectado vía WiFi a $host:$port"
+            _statusMessage.value = tr("Conectado vía WiFi a $host:$port", "Connected via WiFi to $host:$port")
             true
         } catch (e: CancellationException) {
             closeSocket()
@@ -76,7 +82,10 @@ class WifiObdConnection(
         } catch (e: Exception) {
             disconnect()
             _status.value = ConnectionStatus.ERROR
-            _statusMessage.value = "Error al conectar WiFi: ${e.localizedMessage}"
+            _statusMessage.value = tr(
+                "Error al conectar WiFi: ${e.localizedMessage}",
+                "WiFi connection error: ${e.localizedMessage}"
+            )
             onLog?.invoke("❌ ${_statusMessage.value}")
             false
         }
@@ -85,7 +94,7 @@ class WifiObdConnection(
     override suspend fun disconnect() = withContext(Dispatchers.IO) {
         closeSocket()
         _status.value = ConnectionStatus.DISCONNECTED
-        _statusMessage.value = "Desconectado"
+        _statusMessage.value = tr("Desconectado", "Disconnected")
     }
 
     private fun closeSocket() {
@@ -107,15 +116,15 @@ class WifiObdConnection(
             } catch (e: IOException) {
                 closeSocket()
                 _status.value = ConnectionStatus.DISCONNECTED
-                _statusMessage.value = e.message ?: "Enlace WiFi perdido"
+                _statusMessage.value = e.message ?: tr("Enlace WiFi perdido", "WiFi link lost")
                 throw e
             }
         }
     }
 
     private suspend fun sendCommandInternal(command: String, timeoutMs: Long = 2500L): String {
-        val out = outputStream ?: throw IOException("No hay salida WiFi")
-        val inStream = inputStream ?: throw IOException("No hay entrada WiFi")
+        val out = outputStream ?: throw IOException(tr("No hay salida WiFi", "No WiFi output stream"))
+        val inStream = inputStream ?: throw IOException(tr("No hay entrada WiFi", "No WiFi input stream"))
 
         while (inStream.available() > 0) {
             inStream.read()
@@ -134,7 +143,7 @@ class WifiObdConnection(
                 val len = inStream.read(buffer)
                 if (len == -1) {
                     _status.value = ConnectionStatus.DISCONNECTED
-                    throw java.io.IOException("Socket WiFi cerrado por el dispositivo (EOF)")
+                    throw java.io.IOException(tr("Socket WiFi cerrado por el dispositivo (EOF)", "WiFi socket closed by device (EOF)"))
                 }
                 if (len > 0) {
                     val chunk = String(buffer, 0, len, Charsets.US_ASCII)
@@ -146,12 +155,18 @@ class WifiObdConnection(
             } else {
                 if (socket?.isConnected != true || socket?.isClosed == true) {
                     _status.value = ConnectionStatus.DISCONNECTED
-                    throw java.io.IOException("Socket WiFi desconectado")
+                    throw java.io.IOException(tr("Socket WiFi desconectado", "WiFi socket disconnected"))
                 }
                 delay(2)
             }
         }
 
-        throw IOException("Sin respuesta completa del adaptador a $command en ${timeoutMs}ms")
+        throw IOException(
+            tr(
+                "Sin respuesta completa del adaptador a $command en ${timeoutMs}ms",
+                "No complete response from adapter to $command within ${timeoutMs}ms"
+            )
+        )
     }
 }
+

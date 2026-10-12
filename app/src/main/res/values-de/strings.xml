@@ -1,0 +1,29 @@
+<resources>
+    <string name="app_name">StradaOBD</string>
+    <string name="tab_sport">Sport</string>
+    <string name="tab_digital">Digital-HUD</string>
+    <string name="tab_custom">Benutzerdefiniert</string>
+    <string name="tab_vehicle">Fahrzeug</string>
+    <string name="tab_grid">Sensoren</string>
+    <string name="tab_settings">Einstellungen</string>
+    <string name="tab_dtc">Fehler</string>
+    <string name="tab_connection">Verbindung</string>
+    <string name="tab_terminal">AT-Terminal</string>
+    <string name="tab_alerts">Warnungen</string>
+    <string name="tab_recording">Aufzeichnung</string>
+    <string name="nav_driving">Fahren</string>
+    <string name="nav_home">Start</string>
+    <string name="nav_panels">Anzeigen</string>
+    <string name="nav_menu">Menü</string>
+    <string name="back_exit_toast">Erneut drücken, um StradaOBD zu beenden</string>
+    <string name="settings_language_title">App-Sprache</string>
+    <string name="settings_language_subtitle">Wählen Sie aus, wie die Sprache für Bildschirme, Sensoren und Diagnosen festgelegt wird.</string>
+    <string name="settings_language_system">Automatisch (Systemsprache)</string>
+    <string name="settings_display_mode_title">Bildschirmdarstellung</string>
+    <string name="settings_display_mode_car">Auto-Modus</string>
+    <string name="settings_display_mode_mobile">Mobil-Modus</string>
+    <string name="notification_channel_name">OBD-Messung und Aufzeichnung</string>
+    <string name="notification_channel_description">Steuert Hintergrundsitzungen zur Sensormessung</string>
+    <string name="notification_stop_recording">Aufzeichnung beenden</string>
+    <string name="notification_stop_reading">Messung beenden</string>
+</resources>

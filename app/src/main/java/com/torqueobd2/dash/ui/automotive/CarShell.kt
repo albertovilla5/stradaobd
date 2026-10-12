@@ -46,10 +46,12 @@ fun CarShell(title: String, vehicle: String, connection: ConnectionState,
         val railGap = ((maxHeight - navigationHeight * 4 - 8.dp) / 3).coerceIn(0.dp, 8.dp)
         val bottomColumns = if (maxWidth < 480.dp * scale) 2 else 4
         val navigation: @Composable (Boolean, IntRange) -> Unit = { vertical, range ->
-            val items = listOf(Triple("Conducción", Icons.Default.Speed, onDriving),
-                Triple("Paneles", Icons.Default.DashboardCustomize, onPanels),
-                Triple("Averías", Icons.Default.CarRepair, onDiagnostics),
-                Triple("Menú", Icons.Default.Apps, onMenu))
+            val items = listOf(
+                Triple(com.torqueobd2.dash.i18n.tr("Conducción", "Driving"), Icons.Default.Speed, onDriving),
+                Triple(com.torqueobd2.dash.i18n.tr("Paneles", "Panels"), Icons.Default.DashboardCustomize, onPanels),
+                Triple(com.torqueobd2.dash.i18n.tr("Averías", "Faults"), Icons.Default.CarRepair, onDiagnostics),
+                Triple(com.torqueobd2.dash.i18n.tr("Menú", "Menu"), Icons.Default.Apps, onMenu)
+            )
             items.forEachIndexed { index, item ->
                 if (index !in range) return@forEachIndexed
                 val active = when (index) { 0 -> !menuVisible && selected == 0; 1 -> !menuVisible && selected == 1; 2 -> !menuVisible && selected == 5; else -> menuVisible || selected in 2..4 }
@@ -65,7 +67,7 @@ fun CarShell(title: String, vehicle: String, connection: ConnectionState,
                                 Text(diagnosticCount.toString(), Modifier.padding(horizontal = 6.dp, vertical = 3.dp), color = CarbonBlack, fontSize = 20.sp)
                             }
                         }
-                        Text(if (index == 0) "Inicio" else item.first, color = if (active) CockpitBackground else CockpitMuted, fontSize = 24.sp,
+                        Text(if (index == 0) com.torqueobd2.dash.i18n.tr("Inicio", "Home") else item.first, color = if (active) CockpitBackground else CockpitMuted, fontSize = 24.sp,
                             fontWeight = FontWeight.Medium, maxLines = 1)
                     }
                 }
@@ -74,14 +76,14 @@ fun CarShell(title: String, vehicle: String, connection: ConnectionState,
         Row(Modifier.fillMaxSize()) {
             if (rail) Column(Modifier.width(railWidth).fillMaxHeight().padding(horizontal = 12.dp, vertical = if (shortRail) 4.dp else 12.dp),
                 verticalArrangement = Arrangement.spacedBy(if (shortRail) railGap else 20.dp)) {
-                if (!shortRail) Text("OBD", Modifier.fillMaxWidth().padding(vertical = 8.dp), color = CockpitMuted, fontSize = 24.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, letterSpacing = 3.sp)
+                if (!shortRail) Text("STRADA", Modifier.fillMaxWidth().padding(vertical = 8.dp), color = CockpitMuted, fontSize = 20.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, letterSpacing = 2.5.sp)
                 navigation(true, 0..3)
             }
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 Row(Modifier.fillMaxWidth().heightIn(min = 76.dp).padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (menuVisible || selected > 1) CarIconButton(onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", Modifier.size(32.dp), tint = TextWhite)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, com.torqueobd2.dash.i18n.tr("Volver", "Back"), Modifier.size(32.dp), tint = TextWhite)
                     }
                     Column(Modifier.weight(1f)) {
                         Text(title, color = TextWhite, fontSize = 28.sp, fontWeight = FontWeight.Medium,
@@ -89,11 +91,11 @@ fun CarShell(title: String, vehicle: String, connection: ConnectionState,
                         if (rail) Text(vehicle, color = CockpitMuted, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     val label = when (connection.status) {
-                        ConnectionStatus.CONNECTED -> if (connection.type == ConnectionType.SIMULATION) "Simulación" else "OBD conectado"
-                        ConnectionStatus.DISCONNECTED -> "Conectar OBD"
-                        ConnectionStatus.ERROR -> "Error OBD"
-                        ConnectionStatus.RECONNECTING -> "Reconectando"
-                        else -> "Conectando"
+                        ConnectionStatus.CONNECTED -> if (connection.type == ConnectionType.SIMULATION) com.torqueobd2.dash.i18n.tr("Simulación", "Simulation") else com.torqueobd2.dash.i18n.tr("OBD conectado", "OBD connected")
+                        ConnectionStatus.DISCONNECTED -> com.torqueobd2.dash.i18n.tr("Conectar OBD", "Connect OBD")
+                        ConnectionStatus.ERROR -> com.torqueobd2.dash.i18n.tr("Error OBD", "OBD error")
+                        ConnectionStatus.RECONNECTING -> com.torqueobd2.dash.i18n.tr("Reconectando", "Reconnecting")
+                        else -> com.torqueobd2.dash.i18n.tr("Conectando", "Connecting")
                     }
                     if (narrow) {
                         if (connection.status == ConnectionStatus.CONNECTED && connection.type == ConnectionType.SIMULATION) {
@@ -154,7 +156,7 @@ fun CarMenu(entries: List<CarMenuEntry>, modifier: Modifier = Modifier) {
 fun CarDrivingDashboard(vehicle: VehicleState, pids: List<ObdPid>, connection: ConnectionState, maxRpm: Float) {
     val now = System.nanoTime()
     fun reading(id: String) = pids.find { it.id == id }?.currentReading(vehicle, connection, now)
-    fun status(id: String) = pids.find { it.id == id }?.telemetryStatus(vehicle, connection, now)?.label ?: "Sin sensor"
+    fun status(id: String) = pids.find { it.id == id }?.telemetryStatus(vehicle, connection, now)?.label ?: com.torqueobd2.dash.i18n.tr("Sin sensor", "No sensor")
     val rpm = reading(SensorIds.RPM)?.value
     val speed = reading(SensorIds.SPEED)?.value
     val coolant = reading(SensorIds.COOLANT)?.value
@@ -169,7 +171,7 @@ fun CarDrivingDashboard(vehicle: VehicleState, pids: List<ObdPid>, connection: C
                 val speedTextSize = ((instrumentHeight.value - 110f * scale) / (1.2f * scale)).coerceIn(48f, 144f).sp
                 Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center) {
-                    Text("Velocidad", color = CockpitMuted, fontSize = 24.sp)
+                    Text(com.torqueobd2.dash.i18n.tr("Velocidad", "Speed"), color = CockpitMuted, fontSize = 24.sp)
                     FittedValue(speed?.telemetryText() ?: "—", speedTextSize,
                         color = TextWhite, fontWeight = FontWeight.Light, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         letterSpacing = (-4).sp)
@@ -182,13 +184,13 @@ fun CarDrivingDashboard(vehicle: VehicleState, pids: List<ObdPid>, connection: C
         val auxiliary: @Composable (Modifier) -> Unit = { auxiliaryModifier ->
             Column(auxiliaryModifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 if (compact) {
-                    CompactDrivingMetric("Motor", rpm?.telemetryText() ?: "—", "RPM", CockpitAccent, Modifier.weight(1f))
-                    CompactDrivingMetric("Agua", coolant?.telemetryText() ?: "—", "°C", CockpitTeal, Modifier.weight(1f))
-                    CompactDrivingMetric("Voltaje", voltage?.telemetryText(1) ?: "—", "V", CockpitAccent, Modifier.weight(1f))
+                    CompactDrivingMetric(com.torqueobd2.dash.i18n.tr("Motor", "Engine"), rpm?.telemetryText() ?: "—", "RPM", CockpitAccent, Modifier.weight(1f))
+                    CompactDrivingMetric(com.torqueobd2.dash.i18n.tr("Agua", "Coolant"), coolant?.telemetryText() ?: "—", "°C", CockpitTeal, Modifier.weight(1f))
+                    CompactDrivingMetric(com.torqueobd2.dash.i18n.tr("Voltaje", "Voltage"), voltage?.telemetryText(1) ?: "—", "V", CockpitAccent, Modifier.weight(1f))
                 } else {
                     Column(Modifier.weight(1.15f).fillMaxWidth().background(CockpitSurface, RoundedCornerShape(28.dp)).padding(20.dp),
                         verticalArrangement = Arrangement.SpaceBetween) {
-                        Text("Régimen motor", color = CockpitMuted, fontSize = 24.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(com.torqueobd2.dash.i18n.tr("Régimen motor", "Engine RPM"), color = CockpitMuted, fontSize = 24.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             FittedValue(rpm?.telemetryText() ?: "—", 64.sp, Modifier.weight(1f), color = TextWhite, fontWeight = FontWeight.Medium)
                             Text("RPM", color = CockpitAccent, fontSize = 24.sp, modifier = Modifier.padding(bottom = 8.dp))
@@ -196,8 +198,8 @@ fun CarDrivingDashboard(vehicle: VehicleState, pids: List<ObdPid>, connection: C
                         CockpitTrack((rpm ?: 0f) / maxRpm.coerceAtLeast(1000f), CockpitAccent, Modifier.fillMaxWidth().height(8.dp))
                     }
                     Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        SecondaryDrivingMetric("Agua", coolant?.telemetryText() ?: "—", "°C", CockpitTeal, Modifier.weight(1f).fillMaxHeight())
-                        SecondaryDrivingMetric("Voltaje", voltage?.telemetryText(1) ?: "—", "V", CockpitAccent, Modifier.weight(1f).fillMaxHeight())
+                        SecondaryDrivingMetric(com.torqueobd2.dash.i18n.tr("Agua", "Coolant"), coolant?.telemetryText() ?: "—", "°C", CockpitTeal, Modifier.weight(1f).fillMaxHeight())
+                        SecondaryDrivingMetric(com.torqueobd2.dash.i18n.tr("Voltaje", "Voltage"), voltage?.telemetryText(1) ?: "—", "V", CockpitAccent, Modifier.weight(1f).fillMaxHeight())
                     }
                 }
             }
@@ -208,9 +210,9 @@ fun CarDrivingDashboard(vehicle: VehicleState, pids: List<ObdPid>, connection: C
         } else Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             speedInstrument(Modifier.weight(1f).fillMaxWidth())
             Column(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                CompactDrivingMetric("Motor", rpm?.telemetryText() ?: "—", "RPM", CockpitAccent, Modifier.weight(1f))
-                CompactDrivingMetric("Agua", coolant?.telemetryText() ?: "—", "°C", CockpitTeal, Modifier.weight(1f))
-                CompactDrivingMetric("Voltaje", voltage?.telemetryText(1) ?: "—", "V", CockpitAccent, Modifier.weight(1f))
+                CompactDrivingMetric(com.torqueobd2.dash.i18n.tr("Motor", "Engine"), rpm?.telemetryText() ?: "—", "RPM", CockpitAccent, Modifier.weight(1f))
+                CompactDrivingMetric(com.torqueobd2.dash.i18n.tr("Agua", "Coolant"), coolant?.telemetryText() ?: "—", "°C", CockpitTeal, Modifier.weight(1f))
+                CompactDrivingMetric(com.torqueobd2.dash.i18n.tr("Voltaje", "Voltage"), voltage?.telemetryText(1) ?: "—", "V", CockpitAccent, Modifier.weight(1f))
             }
         }
     }

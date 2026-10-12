@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.torqueobd2.dash.data.model.*
 import com.torqueobd2.dash.data.repository.DashboardDesignCodec
+import com.torqueobd2.dash.i18n.tr
+import com.torqueobd2.dash.i18n.trUnit
 import com.torqueobd2.dash.ui.components.ResponsiveDialog
 import com.torqueobd2.dash.ui.components.ResponsiveFormDialog
 import com.torqueobd2.dash.ui.theme.*
@@ -42,26 +44,32 @@ internal fun DashboardTransferDialog(config: CustomDashboardConfig, source: Int,
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     item {
-                        Text(if (duplicate) "Duplicar indicador" else "Mover / intercambiar", color = TextWhite, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Text(if (duplicate) tr("Duplicar indicador", "Duplicate gauge") else tr("Mover / intercambiar", "Move / swap"), color = TextWhite, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     }
-                    item { Text("${config.getWidgetForSlot(source)?.title} · Ranura ${source + 1}", color = RacingOrange) }
+                    item { Text("${config.getWidgetForSlot(source)?.localizedTitle} · ${tr("Ranura ${source + 1}", "Slot ${source + 1}")}", color = RacingOrange) }
                     item {
-                        Text(if (duplicate) "Selecciona una ranura vacía. La copia se puede editar por separado." else "Selecciona el destino. Si está ocupado, los indicadores intercambian sus posiciones.", color = TextMuted)
+                        Text(
+                            if (duplicate) tr("Selecciona una ranura vacía. La copia se puede editar por separado.", "Select an empty slot. The copy can be edited separately.")
+                            else tr("Selecciona el destino. Si está ocupado, los indicadores intercambian sus posiciones.", "Select the destination. If occupied, the gauges will swap positions."),
+                            color = TextMuted
+                        )
                     }
                     items((0 until config.gridLayout.slotCount).filter { it != source }) { index ->
                         val target = config.getWidgetForSlot(index)
                         val enabled = !duplicate || target == null
-                        Card(Modifier.fillMaxWidth().heightIn(min = if (LocalCarMode.current) 76.dp else 56.dp).semantics { contentDescription = "Destino ranura ${index + 1}" }
+                        val slotDesc = tr("Destino ranura ${index + 1}", "Target slot ${index + 1}")
+                        Card(Modifier.fillMaxWidth().heightIn(min = if (LocalCarMode.current) 76.dp else 56.dp).semantics { contentDescription = slotDesc }
                             .clickable(enabled = enabled) { onSelect(index) }, colors = CardDefaults.cardColors(containerColor = DarkSurface), border = BorderStroke(1.dp, BorderDark)) {
-                            Text("Ranura ${index + 1} · ${target?.title ?: "Vacía"}" + if (target != null && !duplicate) " · Intercambiar" else "",
+                            val targetLabel = target?.localizedTitle ?: tr("Vacía", "Empty")
+                            Text(tr("Ranura ${index + 1} · $targetLabel", "Slot ${index + 1} · $targetLabel") + if (target != null && !duplicate) tr(" · Intercambiar", " · Swap") else "",
                                 color = if (enabled) TextWhite else TextDim, modifier = Modifier.padding(12.dp))
                         }
                     }
                     if (duplicate && config.getSlotList().none { it == null }) item {
-                        Text("No hay ranuras vacías. Amplía la rejilla para crear una copia.", color = WarningAmber)
+                        Text(tr("No hay ranuras vacías. Amplía la rejilla para crear una copia.", "No empty slots available. Expand the grid to create a copy."), color = WarningAmber)
                     }
                 }
-                TextButton(onDismiss, Modifier.align(androidx.compose.ui.Alignment.End).heightIn(min = if (LocalCarMode.current) 76.dp else 56.dp)) { Text("Cancelar") }
+                TextButton(onDismiss, Modifier.align(androidx.compose.ui.Alignment.End).heightIn(min = if (LocalCarMode.current) 76.dp else 56.dp)) { Text(tr("Cancelar", "Cancel")) }
             }
         }
     }
@@ -69,8 +77,14 @@ internal fun DashboardTransferDialog(config: CustomDashboardConfig, source: Int,
 
 @Composable
 internal fun DashboardDeleteDialog(name: String, onDismiss: () -> Unit, onDelete: () -> Unit) {
-    ResponsiveFormDialog("Eliminar pestaña", "Eliminar", onDismiss, onDelete) {
-        Text("Se eliminará «$name» con todos sus indicadores. Los sensores seguirán en la biblioteca.", color = TextWhite)
+    ResponsiveFormDialog(tr("Eliminar pestaña", "Delete tab"), tr("Eliminar", "Delete"), onDismiss, onDelete) {
+        Text(
+            tr(
+                "Se eliminará «$name» con todos sus indicadores. Los sensores seguirán en la biblioteca.",
+                "\"$name\" and all its gauges will be deleted. Sensors will remain in your library."
+            ),
+            color = TextWhite
+        )
     }
 }
 
@@ -91,8 +105,8 @@ internal fun DashboardDesignFilesDialog(tabs: CustomDashboardTabs, pids: List<Ob
                 busy = true
                 message = try {
                     withContext(Dispatchers.IO) { requireNotNull(context.contentResolver.openOutputStream(uri)).bufferedWriter().use { it.write(text) } }
-                    "Diseños exportados"
-                } catch (e: Exception) { "No se pudo exportar: ${e.message}" }
+                    tr("Diseños exportados", "Designs exported")
+                } catch (e: Exception) { tr("No se pudo exportar: ${e.message}", "Could not export: ${e.message}") }
                 busy = false
             }
         }
@@ -106,14 +120,14 @@ internal fun DashboardDesignFilesDialog(tabs: CustomDashboardTabs, pids: List<Ob
                         val buffer = ByteArray(8192); val out = ByteArrayOutputStream()
                         while (true) {
                             val size = input.read(buffer); if (size < 0) break
-                            require(out.size() + size <= DashboardDesignCodec.MAX_BYTES) { "El archivo supera 2 MB" }
+                            require(out.size() + size <= DashboardDesignCodec.MAX_BYTES) { tr("El archivo supera 2 MB", "File exceeds 2 MB") }
                             out.write(buffer, 0, size)
                         }
                         DashboardDesignCodec.read(out.toString("UTF-8"))
                     }
                 }
-                "Archivo válido. Revisa las pestañas antes de importar."
-            } catch (e: Exception) { "No se pudo importar: ${e.message}" }
+                tr("Archivo válido. Revisa las pestañas antes de importar.", "Valid file. Review tabs before importing.")
+            } catch (e: Exception) { tr("No se pudo importar: ${e.message}", "Could not import: ${e.message}") }
             busy = false
         }
     }
@@ -122,27 +136,46 @@ internal fun DashboardDesignFilesDialog(tabs: CustomDashboardTabs, pids: List<Ob
             shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Importar / exportar diseños", color = TextWhite, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Text("Se guardan rejillas, presentación, sensores asignados, tipos, títulos, colores, escalas y decimales. Las lecturas y la configuración del adaptador quedan fuera del archivo.", color = TextMuted)
+                    Text(tr("Importar / exportar diseños", "Import / export designs"), color = TextWhite, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        tr(
+                            "Se guardan rejillas, presentación, sensores asignados, tipos, títulos, colores, escalas y decimales. Las lecturas y la configuración del adaptador quedan fuera del archivo.",
+                            "Grids, layout density, assigned sensors, types, titles, colors, scales and decimals are saved. Live readings and adapter settings are not included in the file."
+                        ),
+                        color = TextMuted
+                    )
                     OutlinedButton(onClick = {
                         exportText = DashboardDesignCodec.write(CustomDashboardTabs(listOf(tabs.selectedDashboard)))
-                        save.launch("torque-cuadro-${System.currentTimeMillis()}.json")
-                    }, enabled = !busy) { Text("Exportar esta pestaña") }
+                        save.launch("stradaobd-cuadro-${System.currentTimeMillis()}.json")
+                    }, enabled = !busy) { Text(tr("Exportar esta pestaña", "Export this tab")) }
                     OutlinedButton(onClick = {
-                        exportText = DashboardDesignCodec.write(tabs); save.launch("torque-disenos-${System.currentTimeMillis()}.json")
-                    }, enabled = !busy) { Text("Exportar todas las pestañas") }
-                    OutlinedButton(onClick = { open.launch(arrayOf("*/*")) }, enabled = !busy) { Text("Abrir archivo de diseños") }
+                        exportText = DashboardDesignCodec.write(tabs); save.launch("stradaobd-disenos-${System.currentTimeMillis()}.json")
+                    }, enabled = !busy) { Text(tr("Exportar todas las pestañas", "Export all tabs")) }
+                    OutlinedButton(onClick = { open.launch(arrayOf("*/*")) }, enabled = !busy) { Text(tr("Abrir archivo de diseños", "Open designs file")) }
                     message?.let { Text(it, color = if (imported != null) NeonGreen else WarningAmber) }
                     imported?.let { configs ->
-                        configs.forEach { config -> Text("${config.name} · ${config.gridLayout.badge} · ${config.resolvedSlots().size} indicadores · ${config.density.title}", color = TextWhite) }
+                        configs.forEach { config ->
+                            Text(
+                                "${config.localizedName} · ${config.gridLayout.badge} · ${tr("${config.resolvedSlots().size} indicadores", "${config.resolvedSlots().size} gauges")} · ${config.density.title}",
+                                color = TextWhite
+                            )
+                        }
                         val missing = configs.flatMap { it.resolvedSlots().values }.count { it.resolvePid(pids) == null }
-                        if (missing > 0) Text("$missing indicadores sin sensor encontrado. Podrás asignarlos desde el editor después de importar.", color = WarningAmber)
-                        Text("Se añadirán como pestañas nuevas. Tus cuadros actuales se conservan.", color = TextMuted)
-                        Button(onClick = { onImport(configs); imported = null; message = "Diseños importados como pestañas nuevas" }, enabled = !busy) { Text("Importar como pestañas nuevas") }
+                        if (missing > 0) Text(
+                            tr(
+                                "$missing indicadores sin sensor encontrado. Podrás asignarlos desde el editor después de importar.",
+                                "$missing gauges without a matching sensor. You can assign them in the editor after importing."
+                            ),
+                            color = WarningAmber
+                        )
+                        Text(tr("Se añadirán como pestañas nuevas. Tus cuadros actuales se conservan.", "They will be added as new tabs. Your existing dashboards are preserved."), color = TextMuted)
+                        Button(onClick = { onImport(configs); imported = null; message = tr("Diseños importados como pestañas nuevas", "Designs imported as new tabs") }, enabled = !busy) {
+                            Text(tr("Importar como pestañas nuevas", "Import as new tabs"))
+                        }
                     }
                     if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 }
-                TextButton(onClick = onDismiss, enabled = !busy, modifier = Modifier.align(androidx.compose.ui.Alignment.End)) { Text("Cerrar") }
+                TextButton(onClick = onDismiss, enabled = !busy, modifier = Modifier.align(androidx.compose.ui.Alignment.End)) { Text(tr("Cerrar", "Close")) }
             }
         }
     }
@@ -161,14 +194,21 @@ internal fun DashboardBulkSensorsDialog(config: CustomDashboardConfig, pids: Lis
             shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Añadir varios indicadores", color = TextWhite, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text("${selected.size} seleccionados · $limit ranuras vacías. Se añadirán como tarjetas compactas.", color = TextMuted, fontSize = 12.sp)
-                    OutlinedTextField(search, { search = it }, Modifier.fillMaxWidth(), label = { Text("Buscar sensores") }, singleLine = true)
+                    Text(tr("Añadir varios indicadores", "Add multiple gauges"), color = TextWhite, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        tr(
+                            "${selected.size} seleccionados · $limit ranuras vacías. Se añadirán como tarjetas compactas.",
+                            "${selected.size} selected · $limit empty slots. Will be added as compact tiles."
+                        ),
+                        color = TextMuted,
+                        fontSize = 12.sp
+                    )
+                    OutlinedTextField(search, { search = it }, Modifier.fillMaxWidth(), label = { Text(tr("Buscar sensores", "Search sensors")) }, singleLine = true)
                     TextButton(onClick = { selected = if (selected.isEmpty()) candidates.take(limit).map { it.id }.toSet() else emptySet() }) {
-                        Text(if (selected.isEmpty()) "Seleccionar hasta $limit" else "Quitar selección")
+                        Text(if (selected.isEmpty()) tr("Seleccionar hasta $limit", "Select up to $limit") else tr("Quitar selección", "Clear selection"))
                     }
                     LazyColumn(Modifier.fillMaxWidth().height(176.dp * androidx.compose.ui.platform.LocalDensity.current.fontScale), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        if (candidates.isEmpty()) item { Text("Sin sensores para añadir. Cambia la búsqueda o revisa la biblioteca.", color = TextMuted) }
+                        if (candidates.isEmpty()) item { Text(tr("Sin sensores para añadir. Cambia la búsqueda o revisa la biblioteca.", "No sensors to add. Change your search or check your library."), color = TextMuted) }
                         items(candidates, key = { it.id }) { pid ->
                             val checked = pid.id in selected
                             val enabled = checked || selected.size < limit
@@ -177,7 +217,7 @@ internal fun DashboardBulkSensorsDialog(config: CustomDashboardConfig, pids: Lis
                                 Checkbox(checked, { value -> selected = if (value) selected + pid.id else selected - pid.id }, enabled = enabled)
                                 Column(Modifier.weight(1f)) {
                                     Text(pid.name, color = if (enabled) TextWhite else TextDim, fontSize = 13.sp)
-                                    Text("${pid.modeAndPid} · ${pid.units} · ${pid.supportDescription}", color = TextMuted, fontSize = 11.sp)
+                                    Text("${pid.modeAndPid} · ${trUnit(pid.units)} · ${pid.supportDescription}", color = TextMuted, fontSize = 11.sp)
                                 }
                             }
                         }
@@ -185,10 +225,10 @@ internal fun DashboardBulkSensorsDialog(config: CustomDashboardConfig, pids: Lis
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onDismiss, Modifier.weight(1f), contentPadding = PaddingValues(6.dp)) {
-                        com.torqueobd2.dash.ui.components.FittedValue("Cancelar",13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        com.torqueobd2.dash.ui.components.FittedValue(tr("Cancelar", "Cancel"),13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                     }
                     Button(onClick = { onAdd(selected.toList()) }, enabled = selected.isNotEmpty(), modifier = Modifier.weight(1f), contentPadding = PaddingValues(6.dp)) {
-                        com.torqueobd2.dash.ui.components.FittedValue("Añadir seleccionados",13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        com.torqueobd2.dash.ui.components.FittedValue(tr("Añadir seleccionados", "Add selected"),13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                     }
                 }
             }

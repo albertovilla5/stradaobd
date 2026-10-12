@@ -153,10 +153,10 @@ fun ConnectionScreen(
     BackHandler(enabled = car && carSection != null) { carSection = null }
     if (car && carSection == null) {
         CarMenu(listOf(
-            CarMenuEntry("Bluetooth", "Elegir adaptador ELM327", Icons.Default.Bluetooth) { carSection = 0 },
-            CarMenuEntry("WiFi", "Conexión por IP y puerto", Icons.Default.Wifi) { carSection = 1 },
-            CarMenuEntry("Estado del enlace", "Conexión y reconexión", Icons.Default.Tune) { carSection = 2 },
-            CarMenuEntry("Registro del enlace", "Detalles del adaptador", Icons.Default.Terminal) { carSection = 3 }
+            CarMenuEntry("Bluetooth", com.torqueobd2.dash.i18n.tr("Elegir adaptador ELM327", "Select ELM327 adapter"), Icons.Default.Bluetooth) { carSection = 0 },
+            CarMenuEntry("WiFi", com.torqueobd2.dash.i18n.tr("Conexión por IP y puerto", "Connect via IP and port"), Icons.Default.Wifi) { carSection = 1 },
+            CarMenuEntry(com.torqueobd2.dash.i18n.tr("Estado del enlace", "Link status"), com.torqueobd2.dash.i18n.tr("Conexión y reconexión", "Connection & reconnection"), Icons.Default.Tune) { carSection = 2 },
+            CarMenuEntry(com.torqueobd2.dash.i18n.tr("Registro del enlace", "Link log"), com.torqueobd2.dash.i18n.tr("Detalles del adaptador", "Adapter details"), Icons.Default.Terminal) { carSection = 3 }
         ))
         return
     }
@@ -167,8 +167,12 @@ fun ConnectionScreen(
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
-        if (car) OutlinedButton(onClick = { carSection = null }) { Text("Volver a conexión") }
-        else RacingHeader("Centro de conexión", "Reconexión automática al último OBD. Puedes seleccionar otro adaptador.", eyebrow = "ENLACE / ELM327")
+        if (car) OutlinedButton(onClick = { carSection = null }) { Text(com.torqueobd2.dash.i18n.tr("Volver a conexión", "Back to connection")) }
+        else RacingHeader(
+            com.torqueobd2.dash.i18n.tr("Centro de conexión", "Connection Center"),
+            com.torqueobd2.dash.i18n.tr("Reconexión automática al último OBD. Puedes seleccionar otro adaptador.", "Auto-reconnects to the last OBD adapter. You can select another adapter."),
+            eyebrow = com.torqueobd2.dash.i18n.tr("ENLACE / ELM327", "LINK / ELM327")
+        )
 
         Spacer(modifier = Modifier.height(14.dp))
         if (!car || carSection == 3) Text(text = deviceInfo, color = TextMuted, fontSize = 11.sp)
@@ -189,7 +193,7 @@ fun ConnectionScreen(
                         Icon(Icons.Default.Warning, contentDescription = null, tint = WarningAmber, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Permisos de Bluetooth Necesarios",
+                            text = com.torqueobd2.dash.i18n.tr("Permisos de Bluetooth Necesarios", "Bluetooth Permissions Required"),
                             color = WarningAmber,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp
@@ -197,7 +201,10 @@ fun ConnectionScreen(
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Para poder buscar y conectar tu adaptador ELM327 mediante Bluetooth, Android requiere conceder permisos de dispositivos cercanos / Bluetooth.",
+                        text = com.torqueobd2.dash.i18n.tr(
+                            "Para poder buscar y conectar tu adaptador ELM327 mediante Bluetooth, Android requiere conceder permisos de dispositivos cercanos / Bluetooth.",
+                            "To find and connect your ELM327 adapter via Bluetooth, Android requires granting nearby devices / Bluetooth permissions."
+                        ),
                         color = TextWhite,
                         fontSize = 12.sp,
                         lineHeight = 16.sp
@@ -211,7 +218,7 @@ fun ConnectionScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = WarningAmber),
                         shape = RoundedCornerShape(8.dp)
                     ) {
-                        Text("Conceder Permisos de Bluetooth", color = CarbonBlack, fontWeight = FontWeight.Bold)
+                        Text(com.torqueobd2.dash.i18n.tr("Conceder Permisos de Bluetooth", "Grant Bluetooth Permissions"), color = CarbonBlack, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -234,16 +241,16 @@ fun ConnectionScreen(
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            text = "ESTADO DE CONEXIÓN",
+                            text = com.torqueobd2.dash.i18n.tr("ESTADO DE CONEXIÓN", "CONNECTION STATUS"),
                             color = TextMuted,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
                             text = when (connectionState.type) {
-                                ConnectionType.SIMULATION -> "Modo: Simulación Local"
-                                ConnectionType.BLUETOOTH -> "Modo: Bluetooth SPP"
-                                ConnectionType.WIFI -> "Modo: WiFi TCP"
+                                ConnectionType.SIMULATION -> com.torqueobd2.dash.i18n.tr("Modo: Simulación Local", "Mode: Local Simulation")
+                                ConnectionType.BLUETOOTH -> com.torqueobd2.dash.i18n.tr("Modo: Bluetooth SPP", "Mode: Bluetooth SPP")
+                                ConnectionType.WIFI -> com.torqueobd2.dash.i18n.tr("Modo: WiFi TCP", "Mode: WiFi TCP")
                             },
                             color = TextWhite,
                             fontSize = 13.sp,
@@ -280,12 +287,12 @@ fun ConnectionScreen(
                             }
                             Text(
                                 text = when (connectionState.status) {
-                                    ConnectionStatus.CONNECTED -> "CONECTADO"
-                                    ConnectionStatus.CONNECTING -> "CONECTANDO..."
-                                    ConnectionStatus.RECONNECTING -> "RECONECTANDO..."
-                                    ConnectionStatus.INITIALIZING_ELM -> "INICIALIZANDO..."
-                                    ConnectionStatus.ERROR -> "ERROR"
-                                    ConnectionStatus.DISCONNECTED -> "DESCONECTADO"
+                                    ConnectionStatus.CONNECTED -> com.torqueobd2.dash.i18n.tr("CONECTADO", "CONNECTED")
+                                    ConnectionStatus.CONNECTING -> com.torqueobd2.dash.i18n.tr("CONECTANDO...", "CONNECTING...")
+                                    ConnectionStatus.RECONNECTING -> com.torqueobd2.dash.i18n.tr("RECONECTANDO...", "RECONNECTING...")
+                                    ConnectionStatus.INITIALIZING_ELM -> com.torqueobd2.dash.i18n.tr("INICIALIZANDO...", "INITIALIZING...")
+                                    ConnectionStatus.ERROR -> com.torqueobd2.dash.i18n.tr("ERROR", "ERROR")
+                                    ConnectionStatus.DISCONNECTED -> com.torqueobd2.dash.i18n.tr("DESCONECTADO", "DISCONNECTED")
                                 },
                                 color = statusColor,
                                 fontSize = 11.sp,
@@ -320,14 +327,17 @@ fun ConnectionScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Column {
                                 Text(
-                                    text = "Diagnóstico / Solución recomendada:",
+                                    text = com.torqueobd2.dash.i18n.tr("Diagnóstico / Solución recomendada:", "Troubleshooting / Recommended fix:"),
                                     color = DangerRed,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "1. Comprueba que el contacto del coche esté dado (llave en posición ON o motor en marcha).\n2. Verifica que el adaptador tenga el LED de encendido activo.\n3. Asegúrate de haber emparejado el ELM327 previamente en Ajustes Bluetooth de Android (código 1234 o 0000).\n4. Consulta el 'Registro de Diagnóstico' más abajo para ver el comando exacto que falló.",
+                                    text = com.torqueobd2.dash.i18n.tr(
+                                        "1. Comprueba que el contacto del coche esté dado (llave en posición ON o motor en marcha).\n2. Verifica que el adaptador tenga el LED de encendido activo.\n3. Asegúrate de haber emparejado el ELM327 previamente en Ajustes Bluetooth de Android (código 1234 o 0000).\n4. Consulta el 'Registro de Diagnóstico' más abajo para ver el comando exacto que falló.",
+                                        "1. Make sure the vehicle ignition is ON (key in ON position or engine running).\n2. Verify the adapter's power LED is lit.\n3. Ensure you paired the ELM327 in Android Bluetooth Settings (PIN 1234 or 0000).\n4. Check the 'Live Diagnostic Log' below to see the exact command that failed."
+                                    ),
                                     color = TextWhite.copy(alpha = 0.9f),
                                     fontSize = 11.sp,
                                     lineHeight = 15.sp
@@ -345,12 +355,12 @@ fun ConnectionScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Consultas al adaptador:",
+                        text = com.torqueobd2.dash.i18n.tr("Consultas al adaptador:", "Adapter queries:"),
                         color = TextMuted,
                         fontSize = 12.sp
                     )
                     Text(
-                        text = "${String.format("%.1f", connectionState.commandsPerSecond)} consultas/s",
+                        text = "${String.format(java.util.Locale.US, "%.1f", connectionState.commandsPerSecond)} ${com.torqueobd2.dash.i18n.tr("consultas/s", "queries/s")}",
                         color = NeonCyan,
                         fontSize = 12.sp,
                         fontFamily = FontFamily.SansSerif,
@@ -359,8 +369,13 @@ fun ConnectionScreen(
                 }
 
                 if (connectionState.status == ConnectionStatus.CONNECTED && pollingMode == PollingMode.VISIBLE) {
-                    Text("Solo pantalla: aquí no se consultan sensores. Abre un cuadro para ver la frecuencia de lectura.",
-                        color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                    Text(
+                        com.torqueobd2.dash.i18n.tr(
+                            "Solo pantalla: aquí no se consultan sensores. Abre un cuadro para ver la frecuencia de lectura.",
+                            "Screen only: no sensors are polled here. Open a dashboard to see the polling rate."
+                        ),
+                        color = TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp)
+                    )
                 }
 
                 if (connectionState.status != ConnectionStatus.DISCONNECTED) {
@@ -370,7 +385,11 @@ fun ConnectionScreen(
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (connectionState.status == ConnectionStatus.CONNECTED) "Desconectar Adaptador" else "Detener reconexión", color = DangerRed, fontWeight = FontWeight.Bold)
+                        Text(
+                            if (connectionState.status == ConnectionStatus.CONNECTED) com.torqueobd2.dash.i18n.tr("Desconectar Adaptador", "Disconnect Adapter")
+                            else com.torqueobd2.dash.i18n.tr("Detener reconexión", "Stop reconnecting"),
+                            color = DangerRed, fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
@@ -390,7 +409,7 @@ fun ConnectionScreen(
                 Icon(Icons.Default.Bluetooth, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = if (car) "Bluetooth" else "ADAPTADORES BLUETOOTH (ELM327)",
+                    text = if (car) "Bluetooth" else com.torqueobd2.dash.i18n.tr("ADAPTADORES BLUETOOTH (ELM327)", "BLUETOOTH ADAPTERS (ELM327)"),
                     color = TextWhite,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
@@ -398,7 +417,7 @@ fun ConnectionScreen(
             }
 
             IconButton(onClick = onRefreshDevices) {
-                Icon(Icons.Default.Refresh, contentDescription = "Actualizar dispositivos", tint = NeonCyan)
+                Icon(Icons.Default.Refresh, contentDescription = com.torqueobd2.dash.i18n.tr("Actualizar dispositivos", "Refresh devices"), tint = NeonCyan)
             }
         }
 
@@ -431,12 +450,21 @@ fun ConnectionScreen(
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (isScanningBluetooth) "Detener búsqueda" else "Buscar adaptadores cercanos", color = NeonCyan)
+            Text(
+                if (isScanningBluetooth) com.torqueobd2.dash.i18n.tr("Detener búsqueda", "Stop scan")
+                else com.torqueobd2.dash.i18n.tr("Buscar adaptadores cercanos", "Scan for nearby adapters"),
+                color = NeonCyan
+            )
         }
-        Text("Emparejados y encontrados en la búsqueda. Al elegir uno nuevo, Android puede pedir su PIN. La simulación se activa desde la pestaña General.",
-            color = TextMuted, fontSize = 11.sp, modifier = Modifier.padding(vertical = 8.dp))
+        Text(
+            com.torqueobd2.dash.i18n.tr(
+                "Emparejados y encontrados en la búsqueda. Al elegir uno nuevo, Android puede pedir su PIN. La simulación se activa desde la pestaña General.",
+                "Paired and discovered devices. When selecting a new one, Android may ask for its PIN. Simulation can be enabled in the General tab."
+            ),
+            color = TextMuted, fontSize = 11.sp, modifier = Modifier.padding(vertical = 8.dp)
+        )
         OutlinedButton(onClick = { openBluetoothSettings(context) }, modifier = Modifier.fillMaxWidth()) {
-            Text("Ajustes de Bluetooth de Android", color = NeonCyan)
+            Text(com.torqueobd2.dash.i18n.tr("Ajustes de Bluetooth de Android", "Android Bluetooth Settings"), color = NeonCyan)
         }
         Spacer(Modifier.height(8.dp))
 
@@ -450,14 +478,20 @@ fun ConnectionScreen(
             ) {
                 Column {
                     Text(
-                        text = "No hay adaptadores emparejados ni encontrados.",
+                        text = com.torqueobd2.dash.i18n.tr(
+                            "No hay adaptadores emparejados ni encontrados.",
+                            "No paired or discovered adapters found."
+                        ),
                         color = TextWhite,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Para conectar un ELM327 físico:\n1. Conéctalo a la toma OBD-II del vehículo.\n2. Pon la llave del coche en contacto (ON).\n3. Empareja el adaptador en Ajustes de Bluetooth de la radio (PIN habitual: 1234 o 0000).\n4. Vuelve a esta app.\nSi el ELM327 aparece solo en la app de fábrica y no aquí, el Bluetooth de la radio puede no estar disponible para otras apps; prueba un ELM327 WiFi.",
+                        text = com.torqueobd2.dash.i18n.tr(
+                            "Para conectar un ELM327 físico:\n1. Conéctalo a la toma OBD-II del vehículo.\n2. Pon la llave del coche en contacto (ON).\n3. Empareja el adaptador en Ajustes de Bluetooth de la radio (PIN habitual: 1234 o 0000).\n4. Vuelve a esta app.\nSi el ELM327 aparece solo en la app de fábrica y no aquí, el Bluetooth de la radio puede no estar disponible para otras apps; prueba un ELM327 WiFi.",
+                            "To connect a physical ELM327:\n1. Plug it into the vehicle's OBD-II port.\n2. Turn the vehicle ignition to ON.\n3. Pair the adapter in your device's Bluetooth Settings (common PIN: 1234 or 0000).\n4. Return to this app.\nIf the ELM327 only appears in the head unit's factory app and not here, its Bluetooth stack may be restricted; try a WiFi ELM327."
+                        ),
                         color = TextMuted,
                         fontSize = 11.sp,
                         lineHeight = 16.sp
@@ -472,7 +506,7 @@ fun ConnectionScreen(
                     ) {
                         Icon(Icons.Default.Settings, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Abrir Ajustes de Bluetooth de Android", color = NeonCyan)
+                        Text(com.torqueobd2.dash.i18n.tr("Abrir Ajustes de Bluetooth de Android", "Open Android Bluetooth Settings"), color = NeonCyan)
                     }
                 }
             }
@@ -523,7 +557,7 @@ fun ConnectionScreen(
                                     }
                                 }
                                 Text(
-                                    text = "${dev.address} · ${if (dev.isPaired) "Emparejado" else "Encontrado"}",
+                                    text = "${dev.address} · ${if (dev.isPaired) com.torqueobd2.dash.i18n.tr("Emparejado", "Paired") else com.torqueobd2.dash.i18n.tr("Encontrado", "Discovered")}",
                                     color = TextMuted,
                                     fontSize = 11.sp,
                                     fontFamily = FontFamily.SansSerif
@@ -537,7 +571,7 @@ fun ConnectionScreen(
                                         .background(NeonGreen.copy(alpha = 0.2f))
                                         .padding(horizontal = 10.dp, vertical = 6.dp)
                                 ) {
-                                    Text("ACTIVO", color = NeonGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    Text(com.torqueobd2.dash.i18n.tr("ACTIVO", "ACTIVE"), color = NeonGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                 }
                             } else {
                                 Button(
@@ -545,7 +579,7 @@ fun ConnectionScreen(
                                     colors = ButtonDefaults.buttonColors(containerColor = if (isObd) RacingOrange else Color(0xFF242E3D)),
                                     shape = RoundedCornerShape(8.dp)
                                 ) {
-                                    Text("Conectar", color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text(com.torqueobd2.dash.i18n.tr("Conectar", "Connect"), color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -563,7 +597,7 @@ fun ConnectionScreen(
             Icon(Icons.Default.Wifi, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-                text = if (car) "WiFi / TCP" else "ADAPTADOR WIFI ELM327 (TCP)",
+                text = if (car) "WiFi / TCP" else com.torqueobd2.dash.i18n.tr("ADAPTADOR WIFI ELM327 (TCP)", "WIFI ELM327 ADAPTER (TCP)"),
                 color = TextWhite,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold
@@ -581,13 +615,13 @@ fun ConnectionScreen(
                     OutlinedTextField(
                         value = wifiHost,
                         onValueChange = { wifiHost = it },
-                        label = { Text(if (car) "Dirección IP" else "IP Host (ej: 192.168.0.10)") },
+                        label = { Text(if (car) com.torqueobd2.dash.i18n.tr("Dirección IP", "IP Address") else com.torqueobd2.dash.i18n.tr("IP Host (ej: 192.168.0.10)", "IP Host (e.g., 192.168.0.10)")) },
                         modifier = Modifier.weight(2f)
                     )
                     OutlinedTextField(
                         value = wifiPortStr,
                         onValueChange = { wifiPortStr = it },
-                        label = { Text(if (car) "Puerto" else "Puerto (ej: 35000)") },
+                        label = { Text(if (car) com.torqueobd2.dash.i18n.tr("Puerto", "Port") else com.torqueobd2.dash.i18n.tr("Puerto (ej: 35000)", "Port (e.g., 35000)")) },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -601,7 +635,7 @@ fun ConnectionScreen(
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Conectar vía WiFi TCP", fontWeight = FontWeight.Bold)
+                    Text(com.torqueobd2.dash.i18n.tr("Conectar vía WiFi TCP", "Connect via WiFi TCP"), fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -620,7 +654,7 @@ fun ConnectionScreen(
                 Icon(Icons.Default.Info, contentDescription = null, tint = WarningAmber, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = if (car) "Registro del enlace" else "REGISTRO DE DIAGNÓSTICO EN VIVO",
+                    text = if (car) com.torqueobd2.dash.i18n.tr("Registro del enlace", "Link log") else com.torqueobd2.dash.i18n.tr("REGISTRO DE DIAGNÓSTICO EN VIVO", "LIVE DIAGNOSTIC LOG"),
                     color = TextWhite,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
@@ -633,10 +667,10 @@ fun ConnectionScreen(
                     clipboardManager.setText(AnnotatedString(fullText))
                     showLogsCopiedToast = true
                 }) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = "Copiar logs", tint = NeonCyan)
+                    Icon(Icons.Default.ContentCopy, contentDescription = com.torqueobd2.dash.i18n.tr("Copiar logs", "Copy logs"), tint = NeonCyan)
                 }
                 IconButton(onClick = onClearDiagnosticLogs) {
-                    Icon(Icons.Default.Delete, contentDescription = "Limpiar logs", tint = DangerRed)
+                    Icon(Icons.Default.Delete, contentDescription = com.torqueobd2.dash.i18n.tr("Limpiar logs", "Clear logs"), tint = DangerRed)
                 }
             }
         }
@@ -651,7 +685,7 @@ fun ConnectionScreen(
                     .padding(8.dp)
             ) {
                 Text(
-                    text = "✓ Registro de diagnóstico copiado al portapapeles",
+                    text = com.torqueobd2.dash.i18n.tr("✓ Registro de diagnóstico copiado al portapapeles", "✓ Diagnostic log copied to clipboard"),
                     color = NeonGreen,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
@@ -672,7 +706,10 @@ fun ConnectionScreen(
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (diagnosticLogs.isEmpty()) {
                     Text(
-                        text = "No hay eventos registrados aún. Al conectar el ELM327 verás aquí el handshake detallado paso a paso.",
+                        text = com.torqueobd2.dash.i18n.tr(
+                            "No hay eventos registrados aún. Al conectar el ELM327 verás aquí el handshake detallado paso a paso.",
+                            "No events logged yet. When connecting the ELM327 you will see the step-by-step handshake here."
+                        ),
                         color = TextMuted,
                         fontSize = 11.sp,
                         fontFamily = FontFamily.SansSerif
@@ -681,7 +718,7 @@ fun ConnectionScreen(
                     diagnosticLogs.forEach { logLine ->
                         val color = when {
                             logLine.contains("❌") || logLine.contains("ERROR") -> DangerRed
-                            logLine.contains("⚠️") || logLine.contains("Aviso") -> WarningAmber
+                            logLine.contains("⚠️") || logLine.contains("Aviso") || logLine.contains("Warning") -> WarningAmber
                             logLine.contains("✅") || logLine.contains("🚀") -> NeonGreen
                             logLine.contains("🔌") || logLine.contains("🔍") -> NeonCyan
                             else -> TextWhite.copy(alpha = 0.85f)
@@ -713,5 +750,12 @@ private fun openBluetoothSettings(context: android.content.Context) {
             // Try the general settings screen if the vendor restricts Bluetooth settings.
         }
     }
-    Toast.makeText(context, "Abre los ajustes de Bluetooth desde el menú de la radio.", Toast.LENGTH_LONG).show()
+    Toast.makeText(
+        context,
+        com.torqueobd2.dash.i18n.tr(
+            "Abre los ajustes de Bluetooth desde el menú de la radio.",
+            "Open Bluetooth settings from your head unit menu."
+        ),
+        Toast.LENGTH_LONG
+    ).show()
 }

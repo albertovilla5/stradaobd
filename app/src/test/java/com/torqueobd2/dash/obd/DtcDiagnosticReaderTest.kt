@@ -35,7 +35,7 @@ class DtcDiagnosticReaderTest {
         assertFalse(commands.contains("04"))
         assertFalse(commands.contains("010C"))
         val text = report.asText { "Definición de $it" }
-        assertTrue(text.contains("ECU 7E8")); assertTrue(text.contains("Respuestas originales")); assertTrue(text.contains("ELM de prueba"))
+        assertTrue(text.contains("StradaOBD")); assertTrue(text.contains("ECU 7E8")); assertTrue(text.contains("Respuestas originales")); assertTrue(text.contains("ELM de prueba"))
         assertFalse(text.contains("SIMULACIÓN")); assertEquals(7L, report.session)
     }
     @Test fun noFreezeFrameDoesNotReadCurrentData() = runBlocking {

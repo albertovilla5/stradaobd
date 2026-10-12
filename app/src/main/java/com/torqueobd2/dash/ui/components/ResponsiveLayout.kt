@@ -151,7 +151,7 @@ fun ResponsiveFormDialog(
                 Spacer(Modifier.height(if (short) 2.dp else 8.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onDismiss, Modifier.weight(1f), contentPadding = PaddingValues(if (short) 4.dp else 8.dp)) {
-                        FittedValue("Cancelar", 13.sp, color = TextMuted, textAlign = TextAlign.Center)
+                        FittedValue(com.torqueobd2.dash.i18n.tr("Cancelar", "Cancel"), 13.sp, color = TextMuted, textAlign = TextAlign.Center)
                     }
                     Button(onConfirm, Modifier.weight(1f), contentPadding = PaddingValues(if (short) 4.dp else 8.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = RacingOrange)) {

@@ -18,5 +18,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "TorqueOBD2Dash"
+rootProject.name = "StradaOBD"
 include(":app")

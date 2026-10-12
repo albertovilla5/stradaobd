@@ -1,5 +1,7 @@
 package com.torqueobd2.dash.data.model
 
+import com.torqueobd2.dash.i18n.tr
+
 enum class ConnectionType {
     SIMULATION,
     BLUETOOTH,
@@ -25,7 +27,10 @@ data class ConnectionState(
     val type: ConnectionType = ConnectionType.BLUETOOTH,
     val status: ConnectionStatus = ConnectionStatus.DISCONNECTED,
     val activeDevice: DeviceItem? = null,
-    val statusMessage: String = "Selecciona un adaptador OBD para la primera conexión",
+    val statusMessage: String = tr(
+        "Selecciona un adaptador OBD para la primera conexión",
+        "Select an OBD adapter for the first connection"
+    ),
     val elmVersion: String = "",
     val protocol: String = "",
     val wifiHost: String = "192.168.0.10",

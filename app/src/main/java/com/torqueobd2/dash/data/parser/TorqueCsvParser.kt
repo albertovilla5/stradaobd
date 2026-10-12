@@ -2,6 +2,7 @@ package com.torqueobd2.dash.data.parser
 
 import com.torqueobd2.dash.data.model.ObdPid
 import com.torqueobd2.dash.data.model.PidCategory
+import com.torqueobd2.dash.i18n.tr
 import java.io.BufferedReader
 import java.io.InputStream
 import java.io.InputStreamReader
@@ -59,7 +60,7 @@ object TorqueCsvParser {
             try {
                 val tokens = parseCsvLine(trimmed)
                 if (tokens.size >= 4) {
-                    val name = tokens.getOrElse(0) { "Sensor Desconocido" }
+                    val name = tokens.getOrElse(0) { tr("Sensor Desconocido", "Unknown Sensor") }
                     val shortName = tokens.getOrElse(1) { name.take(10) }
                     val modeAndPid = tokens.getOrElse(2) { "" }
                     val equation = tokens.getOrElse(3) { "" }
@@ -95,7 +96,7 @@ object TorqueCsvParser {
                     skipped++
                 }
             } catch (e: Exception) {
-                errors.add("Error en línea '$trimmed': ${e.message}")
+                errors.add(tr("Error en línea '$trimmed': ${e.message}", "Error on line '$trimmed': ${e.message}"))
                 skipped++
             }
         }
@@ -158,15 +159,42 @@ object TorqueCsvParser {
     private fun categorizePid(name: String, shortName: String, modeAndPid: String): PidCategory {
         val s = (name + " " + shortName).lowercase()
         return when {
-            s.contains("dpf") || s.contains("egt") || s.contains("exhaust") || s.contains("regen") || s.contains("pm") ->
+            s.contains("dpf") || s.contains("fap") || s.contains("egt") || s.contains("exhaust") ||
+                s.contains("escape") || s.contains("regen") || s.contains("pm") || s.contains("hollín") ||
+                s.contains("hollin") || s.contains("ceniza") || s.contains("soot") || s.contains("ash") ||
+                s.contains("adblue") || s.contains("def") || s.contains("scr") || s.contains("nox") ||
+                s.contains("catalizador") || s.contains("catalyst") || s.contains("aditivo") ||
+                s.contains("eolys") || s.contains("egr") ->
                 PidCategory.EXHAUST_DPF
-            s.contains("oil") || s.contains("fuel") || s.contains("consum") || s.contains("gas") ->
-                PidCategory.FUEL
-            s.contains("trans") || s.contains("gear") || s.contains("clutch") ->
+            s.contains("o2") || s.contains("oxígeno") || s.contains("oxigeno") || s.contains("oxygen") ||
+                s.contains("lambda") || s.contains("afr") || s.contains("sonda") ->
+                PidCategory.OXYGEN
+            s.contains("trans") || s.contains("gear") || s.contains("marcha") || s.contains("cambio") ||
+                s.contains("clutch") || s.contains("embrague") || s.contains("atf") || s.contains("dsg") ||
+                s.contains("cvt") || s.contains("tft") ->
                 PidCategory.TRANSMISSION
-            s.contains("volt") || s.contains("battery") || s.contains("alt") ->
+            s.contains("volt") || s.contains("tensión") || s.contains("tension") || s.contains("battery") ||
+                s.contains("batería") || s.contains("bateria") || s.contains("alt") || s.contains("soc") ||
+                s.contains("soh") || s.contains("inversor") || s.contains("inverter") || s.contains("bms") ||
+                s.contains("corriente") || s.contains("current") || s.contains("hv") ->
                 PidCategory.ELECTRICAL
-            s.contains("rpm") || s.contains("speed") || s.contains("coolant") || s.contains("throttle") || s.contains("temp") ->
+            s.contains("dtc") || s.contains("mil") || s.contains("avería") || s.contains("averia") ||
+                s.contains("odómetro") || s.contains("odometro") || s.contains("odometer") ||
+                s.contains("monitor") || s.contains("tpms") || s.contains("neumático") || s.contains("neumatico") ->
+                PidCategory.DIAGNOSTICS
+            s.contains("oil") || s.contains("fuel") || s.contains("combustible") || s.contains("consum") ||
+                s.contains("gas") || s.contains("rail") || s.contains("inyec") || s.contains("inj") ||
+                s.contains("etanol") || s.contains("ethanol") || s.contains("stft") || s.contains("ltft") ||
+                s.contains("trim") || s.contains("evap") ->
+                PidCategory.FUEL
+            s.contains("rpm") || s.contains("speed") || s.contains("velocidad") || s.contains("coolant") ||
+                s.contains("refrigerante") || s.contains("throttle") || s.contains("mariposa") ||
+                s.contains("acelerador") || s.contains("pedal") || s.contains("temp") || s.contains("boost") ||
+                s.contains("turbo") || s.contains("vgt") || s.contains("wastegate") || s.contains("map") ||
+                s.contains("maf") || s.contains("admisión") || s.contains("admision") || s.contains("intake") ||
+                s.contains("intercooler") || s.contains("carga") || s.contains("load") || s.contains("avance") ||
+                s.contains("timing") || s.contains("barom") || s.contains("aceite") || s.contains("cht") ||
+                s.contains("compresor") || s.contains("turbina") ->
                 PidCategory.ENGINE
             else -> PidCategory.CUSTOM
         }

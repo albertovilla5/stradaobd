@@ -52,6 +52,17 @@ object BluetoothPermissionHelper {
     }
 
     /**
+     * En Android 14+ (API 34+), iniciar un Foreground Service con tipo connectedDevice
+     * requiere tener concedido al menos un permiso de dispositivo conectado en tiempo de ejecución
+     * (BLUETOOTH_CONNECT o BLUETOOTH_SCAN). En Android 6–13 basta con FOREGROUND_SERVICE.
+     */
+    fun canStartConnectedDeviceService(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return true
+        return ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
+    }
+
+    /**
      * En Android anterior a 13 intenta encender Bluetooth directamente.
      * Si devuelve false, la UI debe solicitar la activación con ACTION_REQUEST_ENABLE.
      */
@@ -73,6 +84,7 @@ object BluetoothPermissionHelper {
     /**
      * Comprueba si el hardware Bluetooth está soportado y si está actualmente encendido.
      */
+    @Suppress("DEPRECATION")
     fun isBluetoothEnabled(): Boolean {
         return try {
             val adapter = BluetoothAdapter.getDefaultAdapter()
@@ -87,6 +99,7 @@ object BluetoothPermissionHelper {
     /**
      * Comprueba si el dispositivo tiene adaptador Bluetooth disponible en hardware.
      */
+    @Suppress("DEPRECATION")
     fun isBluetoothSupported(): Boolean {
         return try {
             BluetoothAdapter.getDefaultAdapter() != null

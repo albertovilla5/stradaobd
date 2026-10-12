@@ -1,8 +1,10 @@
-# Torque OBD2 Dashboard para Android
+# StradaOBD — Telemetría ECU, Cockpit y Diagnosis para Android
 
-Aplicación Android moderna (desarrollada con **Jetpack Compose**, **Kotlin** y **Material 3**) para conectar adaptadores **ELM327** (Bluetooth SPP, WiFi TCP o Modo Simulación) y visualizar telemetría automotriz en tiempo real. 
+![StradaOBD Banner](branding/stradaobd_banner.svg)
 
-Soporta importación de archivos CSV con PIDs específicos y fórmulas de cálculo idénticas a **Torque Pro**, perfil de vehículo sin estimaciones de telemetría, detección de sensores soportados por la centralita del coche y un **diseñador de cuadros de mando personalizados**.
+Aplicación Android moderna (**StradaOBD**, desarrollada con **Jetpack Compose**, **Kotlin** y **Material 3**) para conectar adaptadores **ELM327** (Bluetooth SPP, WiFi TCP o Modo Simulación) en radios de coche Android y dispositivos móviles, y visualizar telemetría automotriz verificada en tiempo real.
+
+Soporta importación de archivos CSV con PIDs específicos y fórmulas de cálculo compatibles con **Torque Pro**, perfil de vehículo sin estimaciones de telemetría, detección de sensores soportados por la centralita del coche y un **diseñador de cuadros de mando personalizados**.
 
 ## Rejilla fija de coche en 1.6.3
 
@@ -233,7 +235,7 @@ una revisión y añade pestañas nuevas con identidades independientes. Incluye
 rejilla, densidad, ranuras visibles y ocultas, vínculo al sensor, tipo, título,
 color, decimales y escala; no incluye lecturas, conexiones ni definiciones de PIDs.
 Si falta un sensor, el indicador lo comunica y se puede reasignar en el editor.
-Los archivos usan `format: TorqueOBD2Dash.designs`, versión 1, y un límite de 2 MB.
+Los archivos usan `format: StradaOBD.designs` (compatible con `TorqueOBD2Dash.designs`), versión 1, y un límite de 2 MB.
 Un archivo inválido no cambia los cuadros existentes.
 
 `python3 scripts/revisar-editor-funciones.py` verifica las operaciones del editor,
@@ -336,8 +338,8 @@ la correspondencia de PIDs propietarios con un vehículo físico.
 ## Instalación en una radio Android
 
 - Nivel mínimo: **Android 6 (API 23)**, para cubrir también radios con un sistema anterior al indicado por su interfaz. Android 10 sigue siendo compatible.
-- Genera el instalador con `./gradlew :app:assembleRelease`. El APK completo queda en `app/build/outputs/apk/release/app-release.apk`.
-- El APK incluye firmas **v1 y v2** para ampliar la compatibilidad con instaladores de radios. La versión release utiliza actualmente la misma clave local que debug.
+- Genera el instalador con `./gradlew :app:assembleRelease` (`app/build/outputs/apk/release/app-release.apk`) o el bundle para Google Play Store con `./gradlew :app:bundleRelease` (`app/build/outputs/bundle/release/app-release.aab`).
+- El APK y el AAB incluyen firmas **v1 y v2** usando la clave de producción configurada en `keystore.properties` (`upload-keystore.jks`), con respaldo automático a la clave `debug` únicamente en entornos de desarrollo sin keystore configurado.
 - Incluye las arquitecturas ARM de 32 y 64 bits (además de x86/x86_64), librerías nativas comprimidas con extracción durante la instalación e iconos para Android anterior a 8.
 - Copia el archivo completo a la memoria interna de la radio e instálalo desde su gestor de archivos, permitiendo instalar aplicaciones de esa fuente cuando Android lo solicite.
 
@@ -406,7 +408,7 @@ Los modos ligeros no prueban toda la biblioteca de PIDs extendidos al conectar. 
 
 ## 🚀 Nuevas Funcionalidades Agregadas
 
-### 1. 🚗 Perfil del Vehículo (Igual que en Torque Pro)
+### 1. 🚗 Perfil del Vehículo
 - Permite configurar los parámetros del coche necesarios para los modelos matemáticos y cálculos de diagnóstico:
   - **Cilindrada del motor (Litros)**: ej. 2.2L, 2.0L, 1.6L (dato de ficha; no genera telemetría).
   - **Capacidad del depósito de combustible (Litros)**: ej. 50L (para cálculo exacto de litros restantes y autonomía en km).
@@ -444,7 +446,7 @@ Los modos ligeros no prueban toda la biblioteca de PIDs extendidos al conectar. 
 1. 🏁 **Deportivo**: Antiguo HUD, con velocímetro digital grande, marcha sin dato («—», no se estima), luces LED secuenciales de cambio, gráficos históricos y un toque racing en los números y el panel.
 2. 🎨 **A Medida (Personalizado)**: Varios dashboards en pestañas superiores. Pulsa **+** para crear una pestaña con nombre y rejilla propia; toca su nombre o desliza el dash para cambiar entre ellas. **Editar** muestra el botón de herramientas en la misma barra superior: rejilla, indicadores, plantillas, nombre y **Ordenar**. Cada indicador tiene un menú para cambiarlo o vaciar su ranura. La rejilla mantiene su geometría al editar, usa lecturas compactas en celdas pequeñas y muestra una barra de desplazamiento cuando requiere más espacio. Las flechas de Ordenar cambian la posición de cada pestaña conservando la activa. Los nombres, el orden, la selección, los indicadores y las rejillas se guardan entre sesiones. La configuración anterior se conserva en la primera pestaña.
 3. 📋 **Perfil Coche**: Configuración del vehículo y escáner de sensores soportados.
-4. 📊 **Sensores**: Monitor e importador de PIDs unificados. Filas compactas con activación directa, valor, unidad y estado; hasta tres columnas según el ancho y tamaño de letra. Búsqueda y filtros por categoría, activos, compatibles o lecturas disponibles. El menú **Importar / catálogo** permite abrir o pegar CSV de Torque Pro y cargar Honda i-DTEC u OBD estándar; tocar una fila abre sus detalles.
+4. 📊 **Sensores**: Monitor e importador de PIDs unificados. Filas compactas con activación directa, valor, unidad y estado; hasta tres columnas según el ancho y tamaño de letra. Búsqueda y filtros por categoría, activos, compatibles o lecturas disponibles. El menú **Importar / catálogo** permite abrir o pegar CSV de PIDs extendidos y cargar conjuntos de fabricante, Honda i-DTEC u OBD estándar; tocar una fila abre sus detalles.
 5. ⚙️ **Ajustes**: Un único acceso con las pestañas **General** (modo simulación y lectura de sensores), **Conexión** (Bluetooth SPP, búsqueda de adaptadores y WiFi TCP) y **Terminal** (comandos AT y consultas al ELM327).
 
 

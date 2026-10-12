@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="48%" r="55%">
+      <stop offset="0%" stop-color="#171F2C" />
+      <stop offset="100%" stop-color="#090C11" />
+    </radialGradient>
+    <linearGradient id="roadSurface" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#151C26" />
+      <stop offset="100%" stop-color="#222C3C" />
+    </linearGradient>
+  </defs>
+
+  <!-- App Icon Full-Bleed Background (Play Store compliant) -->
+  <rect width="512" height="512" fill="url(#bgGlow)" />
+
+  <!-- Outer Dark Cockpit Bezel -->
+  <circle cx="256" cy="256" r="210" fill="#10151D" stroke="#293341" stroke-width="8" />
+  <circle cx="256" cy="256" r="192" fill="none" stroke="#1B2430" stroke-width="4" />
+
+  <!-- Perspective Highway Road ('Strada') -->
+  <polygon points="222,280 290,280 362,414 150,414" fill="url(#roadSurface)" />
+
+  <!-- Inner Cyan Telemetry Ring (150 deg to 30 deg) -->
+  <path d="M 156.4,303.5 A 115,115 0 0,1 256.0,131.0 A 115,115 0 0,1 355.6,303.5"
+        fill="none" stroke="#6EDAD5" stroke-width="13" stroke-linecap="round" />
+
+  <!-- Main Tachometer Arc (White: 145 deg to 305 deg) -->
+  <path d="M 133.9,331.6 A 149,149 0 0,1 341.5,124.0"
+        fill="none" stroke="#F1F4F8" stroke-width="23" stroke-linecap="butt" />
+
+  <!-- Tachometer Scale Ticks (White) -->
+  <g stroke="#F1F4F8" stroke-width="12" stroke-linecap="round">
+    <line x1="133.9" y1="331.6" x2="153.0" y2="318.2" />
+    <line x1="107.6" y1="233.0" x2="130.6" y2="235.0" />
+    <line x1="150.6" y1="140.6" x2="167.2" y2="157.2" />
+    <line x1="256.0" y1="97.0"  x2="256.0" y2="120.5" />
+    <line x1="341.5" y1="124.0" x2="328.0" y2="143.0" />
+  </g>
+
+  <!-- Racing Orange Redline Sector (305 deg to 35 deg) -->
+  <path d="M 341.5,124.0 A 149,149 0 0,1 378.1,331.6"
+        fill="none" stroke="#FF713D" stroke-width="27" stroke-linecap="butt" />
+
+  <!-- Redline Scale Ticks (Orange) -->
+  <g stroke="#FF713D" stroke-width="13" stroke-linecap="round">
+    <line x1="402.7" y1="220.1" x2="379.5" y2="224.2" />
+    <line x1="378.1" y1="331.6" x2="359.0" y2="318.2" />
+  </g>
+
+  <!-- Perspective Road White Lane Borders -->
+  <g stroke="#F1F4F8" stroke-width="15" stroke-linecap="round">
+    <line x1="226" y1="282" x2="158" y2="410" />
+    <line x1="286" y1="282" x2="354" y2="410" />
+  </g>
+
+  <!-- Perspective Road Dashed Center Line (Racing Orange) -->
+  <g fill="#FF713D">
+    <polygon points="251.5,284 260.5,284 261.8,306 250.2,306" />
+    <polygon points="249.0,320 263.0,320 265.0,352 247.0,352" />
+    <polygon points="245.5,367 266.5,367 269.5,414 242.5,414" />
+  </g>
+
+  <!-- Precision Tachometer Needle (Racing Orange) -->
+  <polygon points="223.5,262.0 234.8,275.8 369.0,157.8 362.2,149.8" fill="#FF713D" />
+
+  <!-- Center Pivot Hub -->
+  <circle cx="256" cy="246" r="24" fill="#FF713D" />
+  <circle cx="256" cy="246" r="10" fill="#090C11" />
+</svg>

@@ -1,5 +1,6 @@
 package com.torqueobd2.dash.data.model
 
+import com.torqueobd2.dash.i18n.tr
 import java.util.UUID
 
 /**
@@ -28,9 +29,9 @@ data class ObdPid(
 ) {
     val supportDescription: String
         get() = when {
-            !supportChecked -> "Por comprobar"
-            isSupported -> "PID compatible"
-            else -> "No disponible"
+            !supportChecked -> tr("Por comprobar", "Unverified")
+            isSupported -> tr("PID compatible", "Supported PID")
+            else -> tr("No disponible", "Not available")
         }
 
     /**
@@ -45,13 +46,25 @@ data class ObdPid(
     }
 }
 
-enum class PidCategory(val title: String) {
-    ENGINE("Motor"),
-    TRANSMISSION("Transmisión"),
-    EXHAUST_DPF("Escape / DPF"),
-    FUEL("Combustible"),
-    ELECTRICAL("Eléctrico / Híbrido"),
-    CUSTOM("Personalizados"),
-    OXYGEN("Oxígeno / Mezcla"),
-    DIAGNOSTICS("Diagnóstico")
+enum class PidCategory {
+    ENGINE,
+    TRANSMISSION,
+    EXHAUST_DPF,
+    FUEL,
+    ELECTRICAL,
+    CUSTOM,
+    OXYGEN,
+    DIAGNOSTICS;
+
+    val title: String
+        get() = when (this) {
+            ENGINE -> tr("Motor", "Engine")
+            TRANSMISSION -> tr("Transmisión", "Transmission")
+            EXHAUST_DPF -> tr("Escape / DPF", "Exhaust / DPF")
+            FUEL -> tr("Combustible", "Fuel")
+            ELECTRICAL -> tr("Eléctrico / Híbrido", "Electrical / Hybrid")
+            CUSTOM -> tr("Personalizados", "Custom")
+            OXYGEN -> tr("Oxígeno / Mezcla", "Oxygen / Mixture")
+            DIAGNOSTICS -> tr("Diagnóstico", "Diagnostics")
+        }
 }

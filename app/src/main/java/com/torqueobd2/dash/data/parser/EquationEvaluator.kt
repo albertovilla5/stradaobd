@@ -1,5 +1,6 @@
 package com.torqueobd2.dash.data.parser
 
+import com.torqueobd2.dash.i18n.tr
 import kotlin.math.pow
 
 /**
@@ -14,14 +15,14 @@ object EquationEvaluator {
      * Evalúa una ecuación de Torque Pro a partir de un mapa de variables (bytes A..Z, AA.. etc).
      */
     fun evaluate(equation: String, variables: Map<String, Double>): Double {
-        require(equation.isNotBlank()) { "Ecuación vacía" }
+        require(equation.isNotBlank()) { tr("Ecuación vacía", "Empty equation") }
         val byteNames = Regex("[A-Za-z][A-Za-z0-9_]*").findAll(equation)
             .map { it.value.uppercase() }.filter { it !in setOf("INT16", "INT24", "INT32", "SIGNED") }.toSet()
-        require(byteNames.isNotEmpty()) { "La ecuación no utiliza bytes de la ECU" }
-        require(byteNames.all { it in variables }) { "Respuesta incompleta o función no admitida" }
+        require(byteNames.isNotEmpty()) { tr("La ecuación no utiliza bytes de la ECU", "Equation does not use ECU bytes") }
+        require(byteNames.all { it in variables }) { tr("Respuesta incompleta o función no admitida", "Incomplete response or unsupported function") }
         val preprocessed = preprocessFunctions(equation, variables)
         val result = Parser(tokenize(preprocessed), variables).parse()
-        require(result.isFinite()) { "Resultado no finito" }
+        require(result.isFinite()) { tr("Resultado no finito", "Non-finite result") }
         return result
     }
 
@@ -111,7 +112,7 @@ object EquationEvaluator {
         val signedRegex = Regex("""SIGNED\s*\(\s*([A-Za-z0-9_]+)\s*\)""", RegexOption.IGNORE_CASE)
         result = signedRegex.replace(result) { mr ->
             val v = mr.groupValues[1]
-            val valNum = vars[v.uppercase()] ?: error("Falta el byte $v")
+            val valNum = vars[v.uppercase()] ?: error(tr("Falta el byte $v", "Missing byte $v"))
             val signedVal = if (valNum > 127.0) valNum - 256.0 else valNum
             signedVal.toString()
         }
@@ -124,11 +125,11 @@ object EquationEvaluator {
         val tokens = mutableListOf<String>()
         var end = 0
         for (match in pattern.findAll(input)) {
-            require(input.substring(end, match.range.first).isBlank()) { "Símbolo desconocido" }
+            require(input.substring(end, match.range.first).isBlank()) { tr("Símbolo desconocido", "Unknown symbol") }
             tokens.add(match.value.uppercase())
             end = match.range.last + 1
         }
-        require(input.substring(end).isBlank()) { "Símbolo desconocido" }
+        require(input.substring(end).isBlank()) { tr("Símbolo desconocido", "Unknown symbol") }
         return tokens
     }
 
@@ -137,13 +138,13 @@ object EquationEvaluator {
         private var cursor = 0
         private fun peek(): String? = tokens.getOrNull(cursor)
         private fun take(): String {
-            require(cursor < tokens.size) { "Falta un operando" }
+            require(cursor < tokens.size) { tr("Falta un operando", "Missing operand") }
             return tokens[cursor++]
         }
 
         fun parse(): Double {
             val value = expression(1)
-            require(cursor == tokens.size) { "Ecuación incompleta o función no admitida" }
+            require(cursor == tokens.size) { tr("Ecuación incompleta o función no admitida", "Incomplete equation or unsupported function") }
             return value
         }
 
@@ -165,12 +166,12 @@ object EquationEvaluator {
                     "+" -> a + b
                     "-" -> a - b
                     "*" -> a * b
-                    "/" -> { require(b != 0.0) { "División por cero" }; a / b }
-                    "%" -> { require(b != 0.0) { "División por cero" }; a % b }
+                    "/" -> { require(b != 0.0) { tr("División por cero", "Division by zero") }; a / b }
+                    "%" -> { require(b != 0.0) { tr("División por cero", "Division by zero") }; a % b }
                     "&" -> (a.toLong() and b.toLong()).toDouble()
                     "|" -> (a.toLong() or b.toLong()).toDouble()
                     "^" -> (a.toLong() xor b.toLong()).toDouble()
-                    else -> error("Operador desconocido")
+                    else -> error(tr("Operador desconocido", "Unknown operator"))
                 }
             }
             return a
@@ -179,8 +180,8 @@ object EquationEvaluator {
         private fun operand(): Double = when (val token = take()) {
             "-" -> -operand()
             "+" -> operand()
-            "(" -> expression(1).also { require(take() == ")") { "Falta cerrar paréntesis" } }
-            else -> token.toDoubleOrNull() ?: variables[token] ?: error("Falta el byte $token")
+            "(" -> expression(1).also { require(take() == ")") { tr("Falta cerrar paréntesis", "Missing closing parenthesis") } }
+            else -> token.toDoubleOrNull() ?: variables[token] ?: error(tr("Falta el byte $token", "Missing byte $token"))
         }
     }
 }

@@ -58,7 +58,7 @@ fun RealtimeChart(
                         drawCircle(lineColor, 3.dp.toPx(), Offset(size.width - 3.dp.toPx(), y))
                     }
                 }
-                if (validPoints.size < 2) Text("Esperando telemetría", color = TextDim, fontSize = 11.sp, modifier = Modifier.align(Alignment.Center))
+                if (validPoints.size < 2) Text(com.torqueobd2.dash.i18n.tr("Esperando telemetría", "Waiting for telemetry"), color = TextDim, fontSize = 11.sp, modifier = Modifier.align(Alignment.Center))
             }
         }
     }

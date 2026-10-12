@@ -6,6 +6,8 @@ import android.content.Intent
 import androidx.core.content.ContextCompat
 import com.torqueobd2.dash.data.model.*
 import com.torqueobd2.dash.data.repository.*
+import com.torqueobd2.dash.i18n.AppI18n
+import com.torqueobd2.dash.i18n.tr
 import com.torqueobd2.dash.obd.ObdManager
 import com.torqueobd2.dash.util.BluetoothPermissionHelper
 import kotlinx.coroutines.*
@@ -56,6 +58,11 @@ class ObdRuntime(private val application: Application) {
         manager.setPids(library.load(manager.activePids.value))
         manager.setSensorAlertRules(SensorAlertRepository(application.getSharedPreferences("sensor_alerts", Context.MODE_PRIVATE)).load())
         scope.launch(Dispatchers.IO) { recorder.refresh() }
+        scope.launch {
+            AppI18n.languageFlow.drop(1).collect {
+                manager.refreshLocalization()
+            }
+        }
         scope.launch {
             manager.activePids.map { pids -> pids.map { it.copy(isSupported = true, supportChecked = false) } }
                 .distinctUntilChanged().collect(library::save)
@@ -115,16 +122,27 @@ class ObdRuntime(private val application: Application) {
 
     private fun hasTarget() = manager.connectionState.value.let { it.activeDevice != null && it.status != ConnectionStatus.DISCONNECTED }
     private fun wantsService() = hasTarget() && (_backgroundEnabled.value || recording.value.active != null || preparingRecording)
+    private fun canStartService() = BluetoothPermissionHelper.canStartConnectedDeviceService(application)
+
+    fun shouldPromptBluetoothOnStartup(): Boolean =
+        !simulationEnabled.value && preferences.lastConnection()?.type != ConnectionType.WIFI
+
+    fun onPermissionsUpdated() {
+        reconcile()
+    }
 
     private fun reconcile() {
-        if (wantsService()) {
+        if (wantsService() && canStartService()) {
             if (uiVisible && !_serviceRunning.value && !servicePending && !stoppingService) {
                 servicePending = true
                 try {
                     ContextCompat.startForegroundService(application, Intent(application, TelemetryForegroundService::class.java))
                 } catch (e: RuntimeException) {
                     servicePending = false
-                    _error.value = "No se pudo iniciar la lectura en segundo plano: ${e.message}"
+                    _error.value = tr(
+                        "No se pudo iniciar la lectura en segundo plano: ${e.message}",
+                        "Could not start background reading: ${e.message}"
+                    )
                 }
             }
         } else if ((_serviceRunning.value || servicePending) && !stoppingService) {
@@ -140,9 +158,22 @@ class ObdRuntime(private val application: Application) {
 
     private fun suspendConnection() {
         manager.pausePolling()
+        if (recording.value.active != null && !_serviceRunning.value && !servicePending) {
+            scope.launch {
+                recorder.stop(
+                    tr("Se detuvo la grabación al pasar a segundo plano sin servicio activo", "Recording stopped when moving to background without active service"),
+                    RecordingEnd.INTERRUPTED
+                )
+            }
+        }
         if (hasTarget() && suspendedTarget == null) {
             suspendedTarget = manager.connectionState.value
-            manager.disconnect("Lectura suspendida. Vuelve a la app para reanudarla.")
+            manager.disconnect(
+                tr(
+                    "Lectura suspendida. Vuelve a la app para reanudarla.",
+                    "Reading suspended. Return to the app to resume."
+                )
+            )
         }
     }
 
@@ -157,9 +188,15 @@ class ObdRuntime(private val application: Application) {
         val expected = stoppingService
         servicePending = false; stoppingService = false; _serviceRunning.value = false
         if (!expected) {
-            _error.value = "Android detuvo el servicio. Abre la app para reanudar la lectura."
+            _error.value = tr(
+                "Android detuvo el servicio. Abre la app para reanudar la lectura.",
+                "Android stopped the service. Open the app to resume reading."
+            )
             scope.launch {
-                recorder.stop("Se detuvo el servicio de lectura", RecordingEnd.INTERRUPTED)
+                recorder.stop(
+                    tr("Se detuvo el servicio de lectura", "Reading service stopped"),
+                    RecordingEnd.INTERRUPTED
+                )
                 if (!uiVisible) suspendConnection()
             }
         }
@@ -170,17 +207,33 @@ class ObdRuntime(private val application: Application) {
     fun startRecording() {
         if (_busy.value || recording.value.active != null) return
         if (!uiVisible || manager.connectionState.value.status != ConnectionStatus.CONNECTED) {
-            _error.value = "Conecta el adaptador o activa la simulación antes de grabar."; return
+            _error.value = tr(
+                "Conecta el adaptador o activa la simulación antes de grabar.",
+                "Connect the adapter or enable simulation before recording."
+            )
+            return
         }
         beginAction(); preparingRecording = true; _error.value = null
         reconcile()
         scope.launch {
             try {
                 actions.withLock {
-                    val started = withTimeoutOrNull(5000) { serviceRunning.first { it } }
-                    if (started == null) { _error.value = "No se pudo preparar el servicio de grabación."; return@withLock }
+                    if (canStartService()) {
+                        val started = withTimeoutOrNull(5000) { serviceRunning.first { it } }
+                        if (started == null && !uiVisible) {
+                            _error.value = tr(
+                                "No se pudo preparar el servicio de grabación.",
+                                "Could not prepare the recording service."
+                            )
+                            return@withLock
+                        }
+                    }
                     if (manager.connectionState.value.status != ConnectionStatus.CONNECTED) {
-                        _error.value = "La conexión cambió antes de iniciar la grabación."; return@withLock
+                        _error.value = tr(
+                            "La conexión cambió antes de iniciar la grabación.",
+                            "Connection changed before recording started."
+                        )
+                        return@withLock
                     }
                     recorder.start(recordingContext(manager.vehicleProfile.value, manager.connectionState.value))
                 }
@@ -188,14 +241,14 @@ class ObdRuntime(private val application: Application) {
         }
     }
 
-    fun stopRecording() = change("Detenida por el usuario") {}
-    fun stopEverything() = change("Lectura y grabación detenidas por el usuario") {
+    fun stopRecording() = change(tr("Detenida por el usuario", "Stopped by user")) {}
+    fun stopEverything() = change(tr("Lectura y grabación detenidas por el usuario", "Reading and recording stopped by user")) {
         suspendedTarget = null
         simulationEnabled.value = false; preferences.simulationEnabled = false
         manager.disconnect()
     }
 
-    fun setSimulationEnabled(enabled: Boolean) = change("Cambió el origen de los datos") {
+    fun setSimulationEnabled(enabled: Boolean) = change(tr("Cambió el origen de los datos", "Data source changed")) {
         suspendedTarget = null
         simulationEnabled.value = enabled; preferences.simulationEnabled = enabled
         if (enabled) manager.startSimulation() else {
@@ -204,13 +257,13 @@ class ObdRuntime(private val application: Application) {
         }
     }
 
-    fun connectBluetooth(device: DeviceItem) = change("Cambió el adaptador") {
+    fun connectBluetooth(device: DeviceItem) = change(tr("Cambió el adaptador", "Adapter changed")) {
         useRealConnection(); manager.connectBluetooth(device)
     }
-    fun connectWifi(host: String, port: Int) = change("Cambió el adaptador") {
+    fun connectWifi(host: String, port: Int) = change(tr("Cambió el adaptador", "Adapter changed")) {
         useRealConnection(); manager.connectWifi(host, port)
     }
-    fun updateProfile(profile: VehicleProfile) = change("Cambió la configuración del vehículo") {
+    fun updateProfile(profile: VehicleProfile) = change(tr("Cambió la configuración del vehículo", "Vehicle configuration changed")) {
         manager.updateProfile(profile)
         if (uiVisible) initializeConnectionIfConfigured()
     }
@@ -239,10 +292,18 @@ class ObdRuntime(private val application: Application) {
     }
 
     fun deleteRecording(id: String) = scope.launch {
-        try { recorder.delete(id) } catch (e: Exception) { _error.value = "No se pudo eliminar la sesión: ${e.message}" }
+        try {
+            recorder.delete(id)
+        } catch (e: Exception) {
+            _error.value = tr(
+                "No se pudo eliminar la sesión: ${e.message}",
+                "Could not delete session: ${e.message}"
+            )
+        }
     }
     suspend fun exportRecording(id: String, output: OutputStream) = recorder.export(id, output)
 
     private fun recordingContext(profile: VehicleProfile, connection: ConnectionState) = RecordingContext(
         profile.id, profile.name, connection.type, connection.activeDevice?.name.orEmpty(), connection.activeDevice?.address.orEmpty())
 }
+

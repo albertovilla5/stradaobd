@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 ADB = [str(pathlib.Path.home() / 'Library/Android/sdk/platform-tools/adb'), '-s', 'emulator-5554']
-PKG = 'com.torqueobd2.dash'
+PKG = 'com.stradaobd.dash'
 OUT = ROOT / 'build/cockpit-review'
 OUT.mkdir(parents=True, exist_ok=True)
 SCENES = {'radio-1024': (1024, 600, 160, 1), 'radio-800': (800, 480, 160, 1),

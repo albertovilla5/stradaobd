@@ -18,7 +18,7 @@ parser.add_argument('--skip-setup', action='store_true', help='Usar una ficha de
 args = parser.parse_args()
 if not args.serial.startswith('emulator-'): raise SystemExit('Solo se permite un emulador.')
 ADB = [str(pathlib.Path.home() / 'Library/Android/sdk/platform-tools/adb'), '-s', args.serial]
-PKG = 'com.torqueobd2.dash'
+PKG = 'com.stradaobd.dash'
 OUT = ROOT / 'build/vehicle-review'
 OUT.mkdir(parents=True, exist_ok=True)
 SCENES = {'radio-800': (800,480,160,1), 'radio-1024': (1024,600,160,1), 'radio-1280': (1280,720,160,1),

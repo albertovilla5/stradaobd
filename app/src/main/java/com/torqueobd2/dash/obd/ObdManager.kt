@@ -19,6 +19,7 @@ import com.torqueobd2.dash.data.parser.PidFieldUnavailableException
 import com.torqueobd2.dash.data.parser.EquationEvaluator
 import com.torqueobd2.dash.data.parser.SupportedPidsDetector
 import com.torqueobd2.dash.data.repository.DefaultPids
+import com.torqueobd2.dash.i18n.tr
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -101,7 +102,12 @@ class ObdManager(
 
     private val _diagnosticLogs = MutableStateFlow<List<String>>(
         listOf(
-            "[${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}] Sistema OBD2 iniciado. Simulación desactivada."
+            "[${java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}] ${
+                tr(
+                    "Sistema OBD2 iniciado. Simulación desactivada.",
+                    "OBD2 system started. Simulation disabled."
+                )
+            }"
         )
     )
     val diagnosticLogs: StateFlow<List<String>> = _diagnosticLogs.asStateFlow()
@@ -129,6 +135,60 @@ class ObdManager(
         initialPids.addAll(DefaultPids.getHondaIdtecPids().map { it.copy(isEnabled = false) })
         _activePids.value = initialPids
 
+    }
+
+    fun refreshLocalization() {
+        val builtInById = DefaultPids.getAllBuiltInPidsById()
+        _activePids.update { current ->
+            current.map { pid ->
+                val builtIn = builtInById[pid.id]
+                if (builtIn != null) {
+                    pid.copy(
+                        name = builtIn.name,
+                        shortName = builtIn.shortName,
+                        valueLabels = builtIn.valueLabels
+                    )
+                } else pid
+            }
+        }
+        synchronized(telemetryLock) {
+            _vehicleState.update { state ->
+                val updatedReadings = state.readings.mapValues { (id, reading) ->
+                    val builtIn = builtInById[id]
+                    if (builtIn != null) {
+                        reading.copy(
+                            pidName = builtIn.name,
+                            shortName = builtIn.shortName,
+                            valueLabels = builtIn.valueLabels
+                        )
+                    } else reading
+                }
+                state.copy(readings = updatedReadings)
+            }
+            evaluateAlerts()
+        }
+        _connectionState.update { state ->
+            val updatedDevice = if (state.type == ConnectionType.SIMULATION && state.activeDevice?.address == "local") {
+                state.activeDevice.copy(name = tr("Simulador Honda i-DTEC", "Honda i-DTEC Simulator"))
+            } else state.activeDevice
+            val updatedMessage = when (state.status) {
+                ConnectionStatus.CONNECTED -> if (state.type == ConnectionType.SIMULATION) {
+                    tr("Simulación activa", "Simulation active")
+                } else {
+                    tr("Conectado a ${updatedDevice?.name}", "Connected to ${updatedDevice?.name}")
+                }
+                ConnectionStatus.DISCONNECTED -> if (isManuallyDisconnected) {
+                    tr(
+                        "Desconectado manualmente. Selecciona un adaptador para volver a conectar.",
+                        "Disconnected manually. Select an adapter to reconnect."
+                    )
+                } else {
+                    tr("Selecciona un adaptador o activa la simulación.", "Select an adapter or enable simulation.")
+                }
+                else -> state.statusMessage
+            }
+            state.copy(activeDevice = updatedDevice, statusMessage = updatedMessage)
+        }
     }
 
     fun updateProfile(newProfile: VehicleProfile) {
@@ -220,9 +280,9 @@ class ObdManager(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            logDiagnostic("❌ Escaneo interrumpido: ${e.message}")
+            logDiagnostic(tr("❌ Escaneo interrumpido: ${e.message}", "❌ Scan interrupted: ${e.message}"))
             if (!connection.isConnected()) {
-                triggerAutoReconnect("Enlace perdido durante el escaneo")
+                triggerAutoReconnect(tr("Enlace perdido durante el escaneo", "Link lost during scan"))
             }
             emptyMap()
         }
@@ -239,7 +299,14 @@ class ObdManager(
         val raw = connection.sendCommand(command)
         val response = Elm327Protocol.cleanResponse(raw).replace(" ", "").uppercase()
             .removePrefix(command.replace(" ", "").uppercase())
-        if (response != "OK") throw java.io.IOException("El adaptador rechazó $command: ${raw.trim()}")
+        if (response != "OK") {
+            throw java.io.IOException(
+                tr(
+                    "El adaptador rechazó $command: ${raw.trim()}",
+                    "Adapter rejected $command: ${raw.trim()}"
+                )
+            )
+        }
     }
 
     private suspend fun selectHeader(header: String) {
@@ -339,7 +406,7 @@ class ObdManager(
         if (connection.isConnected() && pollingJob == null) {
             startPolling()
         } else if (!connection.isConnected()) {
-            triggerAutoReconnect("Reanudando conexión automática")
+            triggerAutoReconnect(tr("Reanudando conexión automática", "Resuming automatic connection"))
         }
     }
 
@@ -348,14 +415,14 @@ class ObdManager(
         replaceConnectionJob {
             _connectionState.value = ConnectionState(
                 type = ConnectionType.SIMULATION,
-                activeDevice = DeviceItem("Simulador Honda i-DTEC", "local"),
+                activeDevice = DeviceItem(tr("Simulador Honda i-DTEC", "Honda i-DTEC Simulator"), "local"),
                 status = ConnectionStatus.CONNECTING,
-                statusMessage = "Iniciando simulación...",
+                statusMessage = tr("Iniciando simulación...", "Starting simulation..."),
                 customInitCommands = _connectionState.value.customInitCommands
             )
             connection = connectionFactory?.invoke(_connectionState.value) ?: SimulatedObdConnection()
             if (connection.connect()) {
-                _connectionState.update { it.copy(status = ConnectionStatus.CONNECTED, statusMessage = "Simulación activa") }
+                _connectionState.update { it.copy(status = ConnectionStatus.CONNECTED, statusMessage = tr("Simulación activa", "Simulation active")) }
                 startPolling()
             }
         }
@@ -367,7 +434,7 @@ class ObdManager(
 
     fun connectWifi(host: String, port: Int) {
         if (host.isBlank() || port !in 1..65535) {
-            logDiagnostic("Indica una IP y un puerto WiFi válido (1–65535).")
+            logDiagnostic(tr("Indica una IP y un puerto WiFi válido (1–65535).", "Enter a valid WiFi IP and port (1–65535)."))
             return
         }
         connectReal(_connectionState.value.copy(
@@ -381,7 +448,7 @@ class ObdManager(
         replaceConnectionJob {
             _connectionState.value = target.copy(
                 status = ConnectionStatus.CONNECTING, commandsPerSecond = 0f,
-                statusMessage = "Conectando a ${target.activeDevice?.name}..."
+                statusMessage = tr("Conectando a ${target.activeDevice?.name}...", "Connecting to ${target.activeDevice?.name}...")
             )
             connectUntilAvailable()
         }
@@ -430,7 +497,10 @@ class ObdManager(
             if (!canConnect(target.type)) {
                 _connectionState.update { it.copy(
                     status = ConnectionStatus.RECONNECTING,
-                    statusMessage = "Esperando Bluetooth, permisos o fin de búsqueda para conectar a ${target.activeDevice?.name}"
+                    statusMessage = tr(
+                        "Esperando Bluetooth, permisos o fin de búsqueda para conectar a ${target.activeDevice?.name}",
+                        "Waiting for Bluetooth, permissions, or scan completion to connect to ${target.activeDevice?.name}"
+                    )
                 ) }
                 delay(2000)
                 continue
@@ -438,7 +508,10 @@ class ObdManager(
             attempt++
             _connectionState.update { it.copy(
                 status = if (attempt == 1) ConnectionStatus.CONNECTING else ConnectionStatus.RECONNECTING,
-                statusMessage = "Conectando a ${target.activeDevice?.name} (intento $attempt)..."
+                statusMessage = tr(
+                    "Conectando a ${target.activeDevice?.name} (intento $attempt)...",
+                    "Connecting to ${target.activeDevice?.name} (attempt $attempt)..."
+                )
             ) }
             connection = connectionFactory?.invoke(target) ?: when (target.type) {
                 ConnectionType.BLUETOOTH -> BluetoothObdConnection(
@@ -452,12 +525,17 @@ class ObdManager(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                logDiagnostic("Error de conexión: ${e.message}")
+                logDiagnostic(tr("Error de conexión: ${e.message}", "Connection error: ${e.message}"))
                 false
             }
             currentCoroutineContext().ensureActive()
             if (connected) {
-                _connectionState.update { it.copy(status = ConnectionStatus.CONNECTED, statusMessage = "Conectado a ${target.activeDevice?.name}") }
+                _connectionState.update {
+                    it.copy(
+                        status = ConnectionStatus.CONNECTED,
+                        statusMessage = tr("Conectado a ${target.activeDevice?.name}", "Connected to ${target.activeDevice?.name}")
+                    )
+                }
                 onRealConnectionEstablished(_connectionState.value)
                 scanSupportedPids(includeExtended = pollingSelection.value.first == PollingMode.ALL)
                 if (connection.isConnected()) {
@@ -471,14 +549,25 @@ class ObdManager(
             val delaySeconds = retryMillis / 1000
             _connectionState.update { it.copy(
                 status = ConnectionStatus.RECONNECTING,
-                statusMessage = "$error. Reintentando en ${delaySeconds}s...", commandsPerSecond = 0f
+                statusMessage = tr("$error. Reintentando en ${delaySeconds}s...", "$error. Retrying in ${delaySeconds}s..."),
+                commandsPerSecond = 0f
             ) }
-            logDiagnostic("Reconexión a ${target.activeDevice?.name}: intento $attempt; nuevo intento en ${delaySeconds}s.")
+            logDiagnostic(
+                tr(
+                    "Reconexión a ${target.activeDevice?.name}: intento $attempt; nuevo intento en ${delaySeconds}s.",
+                    "Reconnecting to ${target.activeDevice?.name}: attempt $attempt; next attempt in ${delaySeconds}s."
+                )
+            )
             delay(retryMillis)
         }
     }
 
-    fun disconnect(message: String = "Desconectado manualmente. Selecciona un adaptador para volver a conectar.") {
+    fun disconnect(
+        message: String = tr(
+            "Desconectado manualmente. Selecciona un adaptador para volver a conectar.",
+            "Disconnected manually. Select an adapter to reconnect."
+        )
+    ) {
         isManuallyDisconnected = true
         replaceConnectionJob {
             _connectionState.update { it.copy(
@@ -513,7 +602,14 @@ class ObdManager(
     fun readTroubleCodes() { launchDiagnostics(null, false) }
     fun clearTroubleCodes(expectedSession: Long, engineStoppedConfirmed: Boolean) {
         if (!engineStoppedConfirmed || _dtcState.value.report?.session != expectedSession || expectedSession != diagnosticSession) {
-            _dtcState.update { it.copy(error = "El borrado necesita confirmación y una lectura de esta conexión.") }
+            _dtcState.update {
+                it.copy(
+                    error = tr(
+                        "El borrado necesita confirmación y una lectura de esta conexión.",
+                        "Clearing requires confirmation and a reading from this connection."
+                    )
+                )
+            }
             return
         }
         launchDiagnostics(expectedSession, true)
@@ -522,19 +618,36 @@ class ObdManager(
     private fun launchDiagnostics(expectedSession: Long?, clear: Boolean) {
         if (_dtcState.value.busy) return
         if (!connection.isConnected() || _connectionState.value.status != ConnectionStatus.CONNECTED) {
-            _dtcState.update { it.copy(error = "Conecta el adaptador antes de consultar averías.") }; return
+            _dtcState.update {
+                it.copy(
+                    error = tr(
+                        "Conecta el adaptador antes de consultar averías.",
+                        "Connect the adapter before reading trouble codes."
+                    )
+                )
+            }
+            return
         }
         val epoch = diagnosticSession
         val link = connection
         val vehicle = _vehicleProfile.value
         val simulated = _connectionState.value.type == ConnectionType.SIMULATION
         val adapter = _connectionState.value.activeDevice?.name ?: "ELM327"
-        _dtcState.update { it.copy(busy = true, progress = "Preparando diagnóstico", error = null, clearResult = null) }
+        _dtcState.update {
+            it.copy(
+                busy = true,
+                progress = tr("Preparando diagnóstico", "Preparing diagnostics"),
+                error = null,
+                clearResult = null
+            )
+        }
         dtcJob = scope.launch(ioDispatcher) {
             try {
                 commandSequenceMutex.withLock {
                     currentCoroutineContext().ensureActive()
-                    check(epoch == diagnosticSession && link === connection && link.isConnected()) { "La conexión cambió" }
+                    check(epoch == diagnosticSession && link === connection && link.isConnected()) {
+                        tr("La conexión cambió", "Connection changed")
+                    }
                     try {
                         // Dirección funcional estándar: consultar todas las ECU OBD de emisiones.
                         // AT D elimina filtros/cabeceras dejados por sensores o por el terminal.
@@ -546,16 +659,25 @@ class ObdManager(
                         if (can == true) configureAdapter("AT CAF1")
                         val reader = DtcDiagnosticReader({ cmd ->
                             currentCoroutineContext().ensureActive()
-                            check(epoch == diagnosticSession && link === connection) { "La conexión cambió" }
+                            check(epoch == diagnosticSession && link === connection) {
+                                tr("La conexión cambió", "Connection changed")
+                            }
                             link.sendCommand(cmd)
                         }, can) { text -> if (epoch == diagnosticSession) _dtcState.update { it.copy(progress = text) } }
                         if (clear) {
-                            check(expectedSession == epoch) { "Informe de otra conexión" }
+                            check(expectedSession == epoch) {
+                                tr("Informe de otra conexión", "Report from another connection")
+                            }
                             if (!simulated) {
                                 val rpm = DiagnosticResponseParser.parse("010C", link.sendCommand("010C"), can)
                                     .frames.mapNotNull { DiagnosticResponseParser.pidData(it, 1, 12) }
                                     .filter { it.size >= 2 }.map { (it[0] * 256 + it[1]) / 4.0 }
-                                check(rpm.none { it > 0 }) { "Motor en marcha: apágalo y deja el contacto encendido antes de borrar." }
+                                check(rpm.none { it > 0 }) {
+                                    tr(
+                                        "Motor en marcha: apágalo y deja el contacto encendido antes de borrar.",
+                                        "Engine running: turn off the engine and leave ignition on before clearing."
+                                    )
+                                }
                             }
                             val result = reader.clear()
                             if (epoch == diagnosticSession) _dtcState.update { it.copy(clearResult = result) }
@@ -573,22 +695,47 @@ class ObdManager(
                                 } catch (e: Exception) {
                                     adapterHeader = "?"
                                     link.disconnect()
-                                    logDiagnostic("No se pudo restaurar el adaptador tras el diagnóstico: ${e.message}")
+                                    logDiagnostic(
+                                        tr(
+                                            "No se pudo restaurar el adaptador tras el diagnóstico: ${e.message}",
+                                            "Could not restore adapter after diagnostics: ${e.message}"
+                                        )
+                                    )
                                 }
                             }
                         }
                     }
                 }
             } catch (e: CancellationException) {
-                if (epoch == diagnosticSession) _dtcState.update { it.copy(error = if (clear) "Consulta cancelada. La captura puede ser anterior al borrado; vuelve a leer las averías." else "Consulta cancelada; se conserva la última captura.") }
+                if (epoch == diagnosticSession) {
+                    _dtcState.update {
+                        it.copy(
+                            error = if (clear) {
+                                tr(
+                                    "Consulta cancelada. La captura puede ser anterior al borrado; vuelve a leer las averías.",
+                                    "Query cancelled. Snapshot may be from before clearing; read trouble codes again."
+                                )
+                            } else {
+                                tr(
+                                    "Consulta cancelada; se conserva la última captura.",
+                                    "Query cancelled; keeping last snapshot."
+                                )
+                            }
+                        )
+                    }
+                }
                 throw e
             } catch (e: Exception) {
-                if (epoch == diagnosticSession) _dtcState.update { it.copy(error = e.message ?: "Falló el diagnóstico") }
-                logDiagnostic("Diagnóstico DTC: ${e.message}")
+                if (epoch == diagnosticSession) {
+                    _dtcState.update { it.copy(error = e.message ?: tr("Falló el diagnóstico", "Diagnostics failed")) }
+                }
+                logDiagnostic(tr("Diagnóstico DTC: ${e.message}", "DTC Diagnostics: ${e.message}"))
             } finally {
                 if (epoch == diagnosticSession) {
                     _dtcState.update { it.copy(busy = false, progress = "") }
-                    if (!link.isConnected()) triggerAutoReconnect("Enlace perdido durante diagnóstico")
+                    if (!link.isConnected()) {
+                        triggerAutoReconnect(tr("Enlace perdido durante diagnóstico", "Link lost during diagnostics"))
+                    }
                 }
             }
         }
@@ -606,8 +753,10 @@ class ObdManager(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            if (!connection.isConnected()) triggerAutoReconnect("Enlace perdido desde terminal")
-            logDiagnostic("❌ Falló $command: ${e.message}")
+            if (!connection.isConnected()) {
+                triggerAutoReconnect(tr("Enlace perdido desde terminal", "Link lost from terminal"))
+            }
+            logDiagnostic(tr("❌ Falló $command: ${e.message}", "❌ Command $command failed: ${e.message}"))
             "ERROR: ${e.message}"
         }
     }
@@ -712,8 +861,14 @@ class ObdManager(
                         throw e
                     } catch (e: Exception) {
                         if (!connection.isConnected()) {
-                            logDiagnostic("❌ Enlace OBD2 perdido: ${e.message ?: "Socket cerrado"}")
-                            triggerAutoReconnect("Pérdida de enlace con el adaptador")
+                            val reason = e.message ?: tr("Socket cerrado", "Socket closed")
+                            logDiagnostic(
+                                tr(
+                                    "❌ Enlace OBD2 perdido: $reason",
+                                    "❌ OBD2 link lost: $reason"
+                                )
+                            )
+                            triggerAutoReconnect(tr("Pérdida de enlace con el adaptador", "Lost link with adapter"))
                             break
                         }
                         retryAfter[request.header to request.command] = System.nanoTime() + 1_000_000_000L
@@ -727,7 +882,9 @@ class ObdManager(
                 // Solo el simulador necesita limitar su bucle de respuestas en memoria.
                 if (_connectionState.value.type == ConnectionType.SIMULATION) delay(20)
             }
-            if (isActive && !connection.isConnected()) triggerAutoReconnect("Enlace OBD perdido")
+            if (isActive && !connection.isConnected()) {
+                triggerAutoReconnect(tr("Enlace OBD perdido", "OBD link lost"))
+            }
         }
     }
 
@@ -759,7 +916,7 @@ class ObdManager(
         val profile = _vehicleProfile.value
         val source = _connectionState.value
         val value = decodedValue.toFloat()
-        require(decodedValue.isFinite() && value.isFinite()) { "Lectura no finita" }
+        require(decodedValue.isFinite() && value.isFinite()) { tr("Lectura no finita", "Non-finite reading") }
         val reading = ObdReading(
             pidId = pid.id, pidName = pid.name, shortName = pid.shortName,
             value = value, units = pid.units, minValue = pid.minValue, maxValue = pid.maxValue,

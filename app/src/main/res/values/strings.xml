@@ -1,8 +1,29 @@
-<resources>
-    <string name="app_name">Torque OBD2 Dashboard</string>
-    <string name="tab_sport">Deportivo</string>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@string/*">
+    <string name="app_name">StradaOBD</string>
+    <string name="tab_sport">Sport</string>
     <string name="tab_digital">Digital HUD</string>
-    <string name="tab_grid">Sensores</string>
-    <string name="tab_connection">Conexión</string>
-    <string name="tab_terminal">Terminal AT</string>
+    <string name="tab_custom">Custom</string>
+    <string name="tab_vehicle">Vehicle</string>
+    <string name="tab_grid">Sensors</string>
+    <string name="tab_settings">Settings</string>
+    <string name="tab_dtc">Faults</string>
+    <string name="tab_connection">Connection</string>
+    <string name="tab_terminal">AT Terminal</string>
+    <string name="tab_alerts">Alerts</string>
+    <string name="tab_recording">Recording</string>
+    <string name="nav_driving">Driving</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_panels">Panels</string>
+    <string name="nav_menu">Menu</string>
+    <string name="back_exit_toast">Press back again to exit StradaOBD</string>
+    <string name="settings_language_title">Application language</string>
+    <string name="settings_language_subtitle">Choose how the language for screens, sensors and diagnostics is selected.</string>
+    <string name="settings_language_system">System default</string>
+    <string name="settings_display_mode_title">Screen layout</string>
+    <string name="settings_display_mode_car">Car mode</string>
+    <string name="settings_display_mode_mobile">Mobile mode</string>
+    <string name="notification_channel_name">OBD reading and recording</string>
+    <string name="notification_channel_description">Controls background sensor reading sessions</string>
+    <string name="notification_stop_recording">Stop recording</string>
+    <string name="notification_stop_reading">Stop reading</string>
 </resources>

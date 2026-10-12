@@ -85,8 +85,13 @@ fun MainScreen(viewModel: ObdDashboardViewModel, modifier: Modifier = Modifier) 
 
     if (savedVehicles.isEmpty()) {
         Box(modifier.fillMaxSize().background(CockpitBackground).safeDrawingPadding().imePadding()) {
-            VehicleProfileWizard(initialProfile = null, initialSetup = true, onCancel = null,
-                onSave = viewModel::createOrUpdateVehicle)
+            VehicleProfileWizard(
+                initialProfile = null,
+                initialSetup = true,
+                onCancel = null,
+                onSave = viewModel::createOrUpdateVehicle,
+                onImportBackup = viewModel::importAppBackup
+            )
         }
         return
     }
@@ -104,9 +109,23 @@ fun MainScreen(viewModel: ObdDashboardViewModel, modifier: Modifier = Modifier) 
         try {
             bluetoothEnableLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
         } catch (_: ActivityNotFoundException) {
-            Toast.makeText(context, "Activa Bluetooth desde los ajustes del dispositivo.", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                context,
+                com.torqueobd2.dash.i18n.tr(
+                    "Activa Bluetooth desde los ajustes del dispositivo.",
+                    "Enable Bluetooth in your device settings."
+                ),
+                Toast.LENGTH_LONG
+            ).show()
         } catch (_: SecurityException) {
-            Toast.makeText(context, "Concede el permiso de Bluetooth para activarlo.", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                context,
+                com.torqueobd2.dash.i18n.tr(
+                    "Concede el permiso de Bluetooth para activarlo.",
+                    "Grant Bluetooth permission to enable it."
+                ),
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -117,6 +136,7 @@ fun MainScreen(viewModel: ObdDashboardViewModel, modifier: Modifier = Modifier) 
         // No repetir la solicitud al recomponer, recrear la actividad o cerrar el diálogo.
         if (bluetoothStartupHandled) return@LaunchedEffect
         bluetoothStartupHandled = true
+        if (!viewModel.shouldPromptBluetoothOnStartup()) return@LaunchedEffect
         if (!BluetoothPermissionHelper.isBluetoothSupported()) return@LaunchedEffect
         if (!BluetoothPermissionHelper.hasAllPermissions(context)) {
             permissionLauncher.launch(BluetoothPermissionHelper.getRequiredPermissions().toTypedArray())
@@ -126,12 +146,12 @@ fun MainScreen(viewModel: ObdDashboardViewModel, modifier: Modifier = Modifier) 
     }
     val haptic = LocalHapticFeedback.current
     val tabs = listOf(
-        NavTab("Deportivo", "Deportivo", Icons.Default.Speed),
-        NavTab("A Medida", "A medida", Icons.Default.DashboardCustomize),
-        NavTab("Vehículo", "Vehículo", Icons.Default.DirectionsCar),
-        NavTab("Sensores", "Sensores", Icons.Default.Dashboard),
-        NavTab("Ajustes", "Ajustes", Icons.Default.Settings),
-        NavTab("Averías", "Averías", Icons.Default.CarRepair)
+        NavTab(com.torqueobd2.dash.i18n.tr("Deportivo", "Sport"), com.torqueobd2.dash.i18n.tr("Deportivo", "Sport"), Icons.Default.Speed),
+        NavTab(com.torqueobd2.dash.i18n.tr("A Medida", "Custom"), com.torqueobd2.dash.i18n.tr("A medida", "Custom"), Icons.Default.DashboardCustomize),
+        NavTab(com.torqueobd2.dash.i18n.tr("Vehículo", "Vehicle"), com.torqueobd2.dash.i18n.tr("Vehículo", "Vehicle"), Icons.Default.DirectionsCar),
+        NavTab(com.torqueobd2.dash.i18n.tr("Sensores", "Sensors"), com.torqueobd2.dash.i18n.tr("Sensores", "Sensors"), Icons.Default.Dashboard),
+        NavTab(com.torqueobd2.dash.i18n.tr("Ajustes", "Settings"), com.torqueobd2.dash.i18n.tr("Ajustes", "Settings"), Icons.Default.Settings),
+        NavTab(com.torqueobd2.dash.i18n.tr("Averías", "Faults"), com.torqueobd2.dash.i18n.tr("Averías", "Faults"), Icons.Default.CarRepair)
     )
     var savedTabIndex by rememberSaveable { mutableIntStateOf(0) }
     var dashboardFullScreen by rememberSaveable { mutableStateOf(false) }
@@ -297,22 +317,30 @@ fun MainScreen(viewModel: ObdDashboardViewModel, modifier: Modifier = Modifier) 
         SensorAlertBanner(sensorAlerts)
         if (dashboardFullScreen && selectedTabIndex == 1) { Box(Modifier.weight(1f)) { screen() } }
         else if (car) {
-            CarShell(title = if (carMenuVisible) "Menú" else when (selectedTabIndex) {
-                0 -> "Conducción"; 1 -> "Mis paneles"; 4 -> when (selectedSettingsTab) {
-                    0 -> "Preferencias"; 1 -> "Conexión"; 2 -> "Terminal"; 3 -> "Avisos"; 4 -> "Grabación"; else -> "Ajustes"
-                }; else -> tabs[selectedTabIndex].title
+            CarShell(title = if (carMenuVisible) com.torqueobd2.dash.i18n.tr("Menú", "Menu") else when (selectedTabIndex) {
+                0 -> com.torqueobd2.dash.i18n.tr("Conducción", "Driving")
+                1 -> com.torqueobd2.dash.i18n.tr("Mis paneles", "My panels")
+                4 -> when (selectedSettingsTab) {
+                    0 -> com.torqueobd2.dash.i18n.tr("Preferencias", "Preferences")
+                    1 -> com.torqueobd2.dash.i18n.tr("Conexión", "Connection")
+                    2 -> com.torqueobd2.dash.i18n.tr("Terminal", "Terminal")
+                    3 -> com.torqueobd2.dash.i18n.tr("Avisos", "Alerts")
+                    4 -> com.torqueobd2.dash.i18n.tr("Grabación", "Recording")
+                    else -> com.torqueobd2.dash.i18n.tr("Ajustes", "Settings")
+                }
+                else -> tabs[selectedTabIndex].title
             }, vehicle = vehicleProfile.name, connection = connectionState,
                 selected = selectedTabIndex, menuVisible = carMenuVisible,
                 diagnosticCount = dtcState.report?.codes?.size?.takeIf { it > 0 },
                 onDriving = { selectTab(0) }, onPanels = { selectTab(1) },
                 onMenu = { carMenuVisible = true; dashboardFullScreen = false }, onDiagnostics = { selectTab(5) }, onBack = { backDispatcher?.onBackPressed() ?: carBack() }, onConnection = { openSettings(1) }) {
                 if (carMenuVisible) CarMenu(listOf(
-                    CarMenuEntry("Vehículo", "Garaje y calibración", Icons.Default.DirectionsCar) { selectTab(2) },
-                    CarMenuEntry("Sensores", "Lecturas y catálogo", Icons.Default.Dashboard) { selectTab(3) },
-                    CarMenuEntry("Averías OBD", "Leer códigos de error y testigo MIL", Icons.Default.CarRepair) { selectTab(5) },
-                    CarMenuEntry("Conexión", "Adaptador Bluetooth / WiFi", Icons.Default.Bluetooth) { openSettings(1) },
-                    CarMenuEntry("Grabación", "Guardar y exportar viajes", Icons.Default.FiberManualRecord) { openSettings(4) },
-                    CarMenuEntry("Ajustes", "Pantalla, avisos y herramientas", Icons.Default.Settings) { openSettings(-1) }
+                    CarMenuEntry(com.torqueobd2.dash.i18n.tr("Vehículo", "Vehicle"), com.torqueobd2.dash.i18n.tr("Garaje y calibración", "Garage & calibration"), Icons.Default.DirectionsCar) { selectTab(2) },
+                    CarMenuEntry(com.torqueobd2.dash.i18n.tr("Sensores", "Sensors"), com.torqueobd2.dash.i18n.tr("Lecturas y catálogo", "Readings & catalog"), Icons.Default.Dashboard) { selectTab(3) },
+                    CarMenuEntry(com.torqueobd2.dash.i18n.tr("Averías OBD", "OBD Faults"), com.torqueobd2.dash.i18n.tr("Leer códigos de error y testigo MIL", "Read fault codes & MIL status"), Icons.Default.CarRepair) { selectTab(5) },
+                    CarMenuEntry(com.torqueobd2.dash.i18n.tr("Conexión", "Connection"), com.torqueobd2.dash.i18n.tr("Adaptador Bluetooth / WiFi", "Bluetooth / WiFi adapter"), Icons.Default.Bluetooth) { openSettings(1) },
+                    CarMenuEntry(com.torqueobd2.dash.i18n.tr("Grabación", "Recording"), com.torqueobd2.dash.i18n.tr("Guardar y exportar viajes", "Save & export trips"), Icons.Default.FiberManualRecord) { openSettings(4) },
+                    CarMenuEntry(com.torqueobd2.dash.i18n.tr("Ajustes", "Settings"), com.torqueobd2.dash.i18n.tr("Pantalla, avisos y herramientas", "Display, alerts & tools"), Icons.Default.Settings) { openSettings(-1) }
                 )) else screen()
             }
         } else if (landscape) {
@@ -321,7 +349,7 @@ fun MainScreen(viewModel: ObdDashboardViewModel, modifier: Modifier = Modifier) 
                     Modifier.width(86.dp * fontScale.coerceAtMost(1.4f)).fillMaxHeight().background(DarkSurface).padding(horizontal = 7.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    RacingMark(Modifier.padding(vertical = 12.dp).size(30.dp, 21.dp))
+                    RacingMark(Modifier.padding(vertical = 10.dp).size(28.dp))
                     Column(Modifier.weight(1f).verticalScroll(verticalNavigationScroll), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         tabs.forEachIndexed { index, tab ->
                             RaceNavigationItem(tab, index == selectedTabIndex, { selectTab(index) }, Modifier.fillMaxWidth().height(navigationHeight))
@@ -375,21 +403,25 @@ private fun CockpitHeader(title: String, vehicle: String, type: ConnectionType, 
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FittedValue("TORQUE", 13.sp, Modifier.weight(1f, fill = false), color = TextWhite,
+                    FittedValue("STRADA", 13.sp, Modifier.weight(1f, fill = false), color = TextWhite,
                         fontWeight = FontWeight.Black, letterSpacing = 1.5.sp, fillWidth = false)
-                    Text("OBD2", color = RacingOrange, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    Text("OBD", color = RacingOrange, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp)
                     if (!compact) Text("/  $title", color = TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                Text(if (type == ConnectionType.SIMULATION) "SIMULACIÓN · DATOS FICTICIOS" else if (compact) title else vehicle, color = TextMuted, fontSize = 10.sp, maxLines = 1,
+                Text(if (type == ConnectionType.SIMULATION) com.torqueobd2.dash.i18n.tr("SIMULACIÓN · DATOS FICTICIOS", "SIMULATION · DEMO DATA") else if (compact) title else vehicle, color = TextMuted, fontSize = 10.sp, maxLines = 1,
                     overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
             }
             val label = when (status) {
-                ConnectionStatus.CONNECTED -> when (type) { ConnectionType.SIMULATION -> "Simulación"; ConnectionType.BLUETOOTH -> "Bluetooth"; ConnectionType.WIFI -> "WiFi" }
-                ConnectionStatus.CONNECTING -> "Conectando"
-                ConnectionStatus.INITIALIZING_ELM -> "Inicializando"
-                ConnectionStatus.RECONNECTING -> "Reconectando"
-                ConnectionStatus.DISCONNECTED -> "Sin conexión"
-                ConnectionStatus.ERROR -> "Error de enlace"
+                ConnectionStatus.CONNECTED -> when (type) {
+                    ConnectionType.SIMULATION -> com.torqueobd2.dash.i18n.tr("Simulación", "Simulation")
+                    ConnectionType.BLUETOOTH -> "Bluetooth"
+                    ConnectionType.WIFI -> "WiFi"
+                }
+                ConnectionStatus.CONNECTING -> com.torqueobd2.dash.i18n.tr("Conectando", "Connecting")
+                ConnectionStatus.INITIALIZING_ELM -> com.torqueobd2.dash.i18n.tr("Inicializando", "Initializing")
+                ConnectionStatus.RECONNECTING -> com.torqueobd2.dash.i18n.tr("Reconectando", "Reconnecting")
+                ConnectionStatus.DISCONNECTED -> com.torqueobd2.dash.i18n.tr("Sin conexión", "Disconnected")
+                ConnectionStatus.ERROR -> com.torqueobd2.dash.i18n.tr("Error de enlace", "Link error")
             }
             val color = when (status) { ConnectionStatus.CONNECTED -> if (type == ConnectionType.SIMULATION) NeonCyan else NeonGreen
                 ConnectionStatus.ERROR -> DangerRed; ConnectionStatus.DISCONNECTED -> TextMuted; else -> WarningAmber }
@@ -401,7 +433,7 @@ private fun CockpitHeader(title: String, vehicle: String, type: ConnectionType, 
             if (!compact) {
                 Column(horizontalAlignment = Alignment.End) {
                     Text(String.format(Locale.US, "%.1f/s", rate), color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    Text("CONSULTAS OBD", color = TextDim, fontSize = 8.sp, letterSpacing = 0.8.sp)
+                    Text(com.torqueobd2.dash.i18n.tr("CONSULTAS OBD", "OBD QUERIES"), color = TextDim, fontSize = 8.sp, letterSpacing = 0.8.sp)
                 }
             }
         }
@@ -501,7 +533,8 @@ private fun ScreenContent(
             onClearNotification = { viewModel.clearNotification() },
             onScanSensors = { viewModel.scanSupportedSensors() },
             isScanningSensors = isScanningSensors,
-            onVisibleSensorsChanged = onGridSensorsChanged
+            onVisibleSensorsChanged = onGridSensorsChanged,
+            onLoadManufacturerPack = viewModel::loadManufacturerPack
         )
         4 -> SettingsScreen(
             selectedTabIndex = selectedSettingsTab,
@@ -550,7 +583,9 @@ private fun ScreenContent(
                     onBackgroundEnabled = viewModel::setBackgroundEnabled,
                     onStart = viewModel::startRecording, onStop = viewModel::stopRecording,
                     onDelete = { viewModel.deleteRecording(it) }, onExport = viewModel::exportRecording)
-            }
+            },
+            onExportBackup = viewModel::exportAppBackup,
+            onImportBackup = viewModel::importAppBackup
         )
     }
 }

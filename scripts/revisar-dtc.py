@@ -19,7 +19,7 @@ args = parser.parse_args()
 if not args.serial.startswith('emulator-'):
     raise SystemExit('Usa un emulador dedicado a desarrollo.')
 ADB = [args.adb, '-s', args.serial]
-PACKAGE = 'com.torqueobd2.dash'
+PACKAGE = 'com.stradaobd.dash'
 OUT = ROOT / 'build/dtc-review'
 OUT.mkdir(parents=True, exist_ok=True)
 commands = []

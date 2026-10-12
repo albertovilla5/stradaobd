@@ -3,7 +3,17 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Deep Carbon Black base -->
     <path
         android:fillColor="#FF090C11"
         android:pathData="M0,0h108v108h-108z" />
+    <!-- Subtle dark cockpit gauge bezel well within adaptive bounds -->
+    <path
+        android:fillColor="#FF10151D"
+        android:pathData="M54,18 A36,36 0 1,1 53.99,18 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF1B2430"
+        android:strokeWidth="1.5"
+        android:pathData="M54,20 A34,34 0 1,1 53.99,20 Z" />
 </vector>

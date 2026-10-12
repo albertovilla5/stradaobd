@@ -27,10 +27,10 @@ fun DpfDiagnosticsScreen(vehicleState: VehicleState, isSimulationMode: Boolean,
     }
     val charts: @Composable (Modifier) -> Unit = { chartModifier ->
         Column(chartModifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            RealtimeChart("Contrapresión", vehicleState.sparklineHistory["HONDA_DPF diff.pres"] ?: emptyList(),
+            RealtimeChart(com.torqueobd2.dash.i18n.tr("Contrapresión", "Backpressure"), vehicleState.sparklineHistory["HONDA_DPF diff.pres"] ?: emptyList(),
                 vehicleState.dpfDifferentialPressureKpa.telemetryText(2), "kPa", NeonCyan,
                 modifier = Modifier.weight(1f).fillMaxWidth())
-            RealtimeChart("Temperatura EGT", vehicleState.sparklineHistory["HONDA_EGT"] ?: emptyList(),
+            RealtimeChart(com.torqueobd2.dash.i18n.tr("Temperatura EGT", "EGT Temperature"), vehicleState.sparklineHistory["HONDA_EGT"] ?: emptyList(),
                 vehicleState.exhaustGasTemp1C.telemetryText(), "°C", RacingOrange,
                 modifier = Modifier.weight(1f).fillMaxWidth())
         }
@@ -49,8 +49,13 @@ fun DpfDiagnosticsScreen(vehicleState: VehicleState, isSimulationMode: Boolean,
                 charts(Modifier.weight(1f).fillMaxWidth())
             }
             Row(Modifier.fillMaxWidth().racingPanel(12.dp).padding(horizontal = 12.dp, vertical = 9.dp)) {
-                Text("PIDs Honda según CSV · Los códigos de regeneración requieren validación para tu ECU.",
-                    color = TextMuted, fontSize = 11.sp, maxLines = 2)
+                Text(
+                    com.torqueobd2.dash.i18n.tr(
+                        "PIDs Honda según CSV · Los códigos de regeneración requieren validación para tu ECU.",
+                        "Honda PIDs from CSV · Regeneration codes require validation for your ECU."
+                    ),
+                    color = TextMuted, fontSize = 11.sp, maxLines = 2
+                )
             }
             if (isSimulationMode) ControlPedalSlider(onThrottleChanged, onExpandedChanged = { throttleExpanded = it })
         }

@@ -1,0 +1,51 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Inner telemetry arc -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.0"
+        android:strokeLineCap="round"
+        android:pathData="M37.98,61.25 A18.5,18.5 0 0,1 54.00,33.50 A18.5,18.5 0 0,1 70.02,61.25" />
+
+    <!-- Main tachometer gauge arc (145 deg to 35 deg) -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="4.0"
+        android:strokeLineCap="round"
+        android:pathData="M34.34,65.77 A24,24 0 0,1 67.77,32.34 A24,24 0 0,1 73.66,65.77" />
+
+    <!-- Tachometer scale ticks -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.0"
+        android:strokeLineCap="round"
+        android:pathData="M34.34,65.77 L37.4,63.6 M30.09,49.91 L33.8,50.2 M37.03,35.03 L39.7,37.7 M54.0,28.0 L54.0,31.8 M67.77,32.34 L65.6,35.4 M77.64,47.83 L73.9,48.5 M73.66,65.77 L70.6,63.6" />
+
+    <!-- Perspective road lane borders -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"
+        android:pathData="M49.2,58.2 L38.5,78.2 M58.8,58.2 L69.5,78.2" />
+
+    <!-- Perspective road dashed center line -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M53.3,58.5 L54.7,58.5 L54.9,62.0 L53.1,62.0 Z M52.9,64.2 L55.1,64.2 L55.4,69.2 L52.6,69.2 Z M52.3,71.5 L55.7,71.5 L56.2,79.0 L51.8,79.0 Z" />
+
+    <!-- Tachometer needle and hub -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M48.8,54.6 L50.6,56.8 L72.2,37.8 L71.1,36.5 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,48.4 A3.6,3.6 0 1,1 53.99,48.4 Z" />
+</vector>

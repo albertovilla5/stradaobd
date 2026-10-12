@@ -15,7 +15,7 @@ p.add_argument('--apk', type=pathlib.Path, default=ROOT/'app/build/outputs/apk/d
 args = p.parse_args()
 if not args.serial.startswith('emulator-'): raise SystemExit('Solo emuladores de desarrollo')
 ADB = [str(pathlib.Path.home()/'Library/Android/sdk/platform-tools/adb'), '-s', args.serial]
-PACKAGE = 'com.torqueobd2.dash'
+PACKAGE = 'com.stradaobd.dash'
 OUT = ROOT/'build/editor-expanded/functions'
 OUT.mkdir(parents=True,exist_ok=True)
 

@@ -37,7 +37,7 @@ args = parser.parse_args()
 if not args.serial.startswith('emulator-'):
     raise SystemExit('Estas pruebas solo se ejecutan en un emulador.')
 adb = [str(pathlib.Path(os.environ.get('ANDROID_HOME', pathlib.Path.home() / 'Library/Android/sdk')) / 'platform-tools/adb'), '-s', args.serial]
-PACKAGE = 'com.torqueobd2.dash'
+PACKAGE = 'com.stradaobd.dash'
 PREFS = 'shared_prefs/torque_obd_prefs.xml'
 args.output.mkdir(parents=True, exist_ok=True)
 

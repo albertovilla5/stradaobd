@@ -19,6 +19,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.torqueobd2.dash.data.model.*
+import com.torqueobd2.dash.i18n.tr
 import com.torqueobd2.dash.ui.automotive.*
 import com.torqueobd2.dash.ui.components.ResponsiveDialog
 import com.torqueobd2.dash.ui.theme.*
@@ -42,29 +43,30 @@ fun CarVehicleConfigScreen(activeProfile: VehicleProfile, savedVehicles: List<Ve
         "garage" -> Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(savedVehicles, key = { it.id }) { vehicle ->
+                    val profileDesc = tr("Perfil: ${vehicle.name}", "Profile: ${vehicle.name}")
                     Surface(onClick = { selectedId = vehicle.id; section = "profile" },
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 132.dp).semantics { contentDescription = "Perfil: ${vehicle.name}" },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 132.dp).semantics { contentDescription = profileDesc },
                         color = CockpitSurface, shape = RoundedCornerShape(28.dp)) {
                         Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                             CarIcon(Icons.Default.DirectionsCar, null, tint = CockpitAccent)
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 CarText(vehicle.name, color = TextWhite, fontSize = 32.sp)
                                 CarText("${vehicle.modelYear} · ${vehicle.fuelType.displayName}", color = CockpitMuted, fontSize = 24.sp)
-                                if (vehicle.id == activeProfile.id) CarText("Vehículo activo", color = CockpitTeal, fontSize = 24.sp)
+                                if (vehicle.id == activeProfile.id) CarText(tr("Vehículo activo", "Active vehicle"), color = CockpitTeal, fontSize = 24.sp)
                             }
                             CarIcon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = CockpitMuted)
                         }
                     }
                 }
             }
-            CarButton({ creating = true }, Modifier.fillMaxWidth()) { CarIcon(Icons.Default.Add, null); Spacer(Modifier.width(12.dp)); CarText("Nuevo vehículo", fontSize = 24.sp) }
+            CarButton({ creating = true }, Modifier.fillMaxWidth()) { CarIcon(Icons.Default.Add, null); Spacer(Modifier.width(12.dp)); CarText(tr("Nuevo vehículo", "New vehicle"), fontSize = 24.sp) }
         }
         "profile" -> CarMenu(listOf(
-            CarMenuEntry("Ficha del vehículo", "${profile.name} · ${profile.modelYear}", Icons.Default.DirectionsCar) { section = "specs" },
-            CarMenuEntry("Editar ficha", "Datos, motor y ajustes OBD", Icons.Default.Edit) { editing = true },
-            CarMenuEntry(if (profile.id == activeProfile.id) "Vehículo activo" else "Usar este vehículo", "${profile.fuelType.displayName} · ${profile.engineDisplacementLiters} L", Icons.Default.CheckCircle,
+            CarMenuEntry(tr("Ficha del vehículo", "Vehicle specs"), "${profile.name} · ${profile.modelYear}", Icons.Default.DirectionsCar) { section = "specs" },
+            CarMenuEntry(tr("Editar ficha", "Edit specs"), tr("Datos, motor y ajustes OBD", "Data, engine and OBD settings"), Icons.Default.Edit) { editing = true },
+            CarMenuEntry(if (profile.id == activeProfile.id) tr("Vehículo activo", "Active vehicle") else tr("Usar este vehículo", "Use this vehicle"), "${profile.fuelType.displayName} · ${profile.engineDisplacementLiters} L", Icons.Default.CheckCircle,
                 enabled = profile.id != activeProfile.id) { onSetActiveVehicle(profile.id) },
-            CarMenuEntry("Eliminar vehículo", if (savedVehicles.size > 1) profile.name else "Conserva al menos un perfil", Icons.Default.Delete,
+            CarMenuEntry(tr("Eliminar vehículo", "Delete vehicle"), if (savedVehicles.size > 1) profile.name else tr("Conserva al menos un perfil", "Keep at least one profile"), Icons.Default.Delete,
                 enabled = savedVehicles.size > 1) { deleting = true }
         ))
         "specs" -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -74,23 +76,23 @@ fun CarVehicleConfigScreen(activeProfile: VehicleProfile, savedVehicles: List<Ve
                         CarText(profile.name, color = TextWhite, fontSize = 32.sp)
                         val draft = VehicleProfileDraft.from(profile)
                         VehicleField.entries.filter { it !in listOf(VehicleField.NAME, VehicleField.OPTIONS, VehicleField.REVIEW) }.forEach { field ->
-                            CarText("${field.title}: ${if (field == VehicleField.FUEL) profile.fuelType.displayName else draft.value(field).ifBlank { "Automático" }} ${field.unit}",
+                            CarText("${field.title}: ${if (field == VehicleField.FUEL) profile.fuelType.displayName else draft.value(field).ifBlank { tr("Automático", "Automatic") }} ${field.unit}",
                                 color = CockpitMuted, fontSize = 24.sp)
                         }
-                        CarText(if (profile.hideUnsupportedSensors) "Sensores no disponibles ocultos" else "Todos los sensores visibles", color = CockpitMuted, fontSize = 24.sp)
+                        CarText(if (profile.hideUnsupportedSensors) tr("Sensores no disponibles ocultos", "Unavailable sensors hidden") else tr("Todos los sensores visibles", "All sensors visible"), color = CockpitMuted, fontSize = 24.sp)
                     }
                 }
             }
-            item { CarButton({ editing = true }, Modifier.fillMaxWidth()) { CarText("Editar ficha", fontSize = 24.sp) } }
+            item { CarButton({ editing = true }, Modifier.fillMaxWidth()) { CarText(tr("Editar ficha", "Edit specs"), fontSize = 24.sp) } }
         }
         "sensors" -> GridMonitorScreen(vehicleState, allPids, connectionState, isScanningSensors,
             onScanSensors, onTogglePid, onVisibleSensorsChanged)
         else -> CarMenu(listOf(
-            CarMenuEntry("Perfil activo", activeProfile.name, Icons.Default.DirectionsCar) { selectedId = activeProfile.id; section = "profile" },
-            CarMenuEntry("Garaje", if (savedVehicles.size == 1) "1 vehículo guardado" else "${savedVehicles.size} vehículos guardados", Icons.Default.Dashboard) { section = "garage" },
-            CarMenuEntry("Nuevo vehículo", "Crear una ficha paso a paso", Icons.Default.Add) { creating = true },
-            CarMenuEntry("Sensores de la ECU", "Escanear y elegir lecturas", Icons.Default.Speed) { section = "sensors" },
-            CarMenuEntry("Privacidad", "Datos guardados en tu dispositivo", Icons.Default.Security) { privacy = true }
+            CarMenuEntry(tr("Perfil activo", "Active profile"), activeProfile.name, Icons.Default.DirectionsCar) { selectedId = activeProfile.id; section = "profile" },
+            CarMenuEntry(tr("Garaje", "Garage"), if (savedVehicles.size == 1) tr("1 vehículo guardado", "1 saved vehicle") else tr("${savedVehicles.size} vehículos guardados", "${savedVehicles.size} saved vehicles"), Icons.Default.Dashboard) { section = "garage" },
+            CarMenuEntry(tr("Nuevo vehículo", "New vehicle"), tr("Crear una ficha paso a paso", "Create a profile step by step"), Icons.Default.Add) { creating = true },
+            CarMenuEntry(tr("Sensores de la ECU", "ECU sensors"), tr("Escanear y elegir lecturas", "Scan and choose readings"), Icons.Default.Speed) { section = "sensors" },
+            CarMenuEntry(tr("Privacidad", "Privacy"), tr("Datos guardados en tu dispositivo", "Data stored on your device"), Icons.Default.Security) { privacy = true }
         ))
     }
     if (creating || editing) ResponsiveDialog(onDismissRequest = { creating = false; editing = false }) {
@@ -106,11 +108,11 @@ fun CarVehicleConfigScreen(activeProfile: VehicleProfile, savedVehicles: List<Ve
     if (deleting) ResponsiveDialog(onDismissRequest = { deleting = false }) {
         Surface(color = CockpitSurface, shape = RoundedCornerShape(28.dp)) {
             Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                CarText("Eliminar vehículo", color = TextWhite, fontSize = 28.sp)
-                CarText("¿Eliminar la ficha de ${profile.name}?", color = CockpitMuted, fontSize = 24.sp)
+                CarText(tr("Eliminar vehículo", "Delete vehicle"), color = TextWhite, fontSize = 28.sp)
+                CarText(tr("¿Eliminar la ficha de ${profile.name}?", "Delete profile for ${profile.name}?"), color = CockpitMuted, fontSize = 24.sp)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CarOutlinedButton({ deleting = false }, Modifier.weight(1f)) { CarText("Cancelar", fontSize = 24.sp) }
-                    CarButton({ onDeleteVehicle(profile.id); deleting = false; section = "garage" }, Modifier.weight(1f)) { CarText("Eliminar", fontSize = 24.sp) }
+                    CarOutlinedButton({ deleting = false }, Modifier.weight(1f)) { CarText(tr("Cancelar", "Cancel"), fontSize = 24.sp) }
+                    CarButton({ onDeleteVehicle(profile.id); deleting = false; section = "garage" }, Modifier.weight(1f)) { CarText(tr("Eliminar", "Delete"), fontSize = 24.sp) }
                 }
             }
         }

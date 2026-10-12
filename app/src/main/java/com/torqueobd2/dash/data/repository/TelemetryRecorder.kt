@@ -1,6 +1,7 @@
 package com.torqueobd2.dash.data.repository
 
 import com.torqueobd2.dash.data.model.*
+import com.torqueobd2.dash.i18n.tr
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,7 +53,7 @@ class TelemetryRecorder(
             writer!!.write(csvRow(listOf("record_type", "timestamp_utc", "timestamp_ms", "elapsed_ms", "session_id",
                 "vehicle_id", "vehicle_name", "source", "adapter_name", "adapter_address", "pid_id", "sensor_name",
                 "command", "ecu_header", "equation", "value", "unit", "status", "detail")))
-            writeEvent("START", "Inicio de grabación")
+            writeEvent("START", tr("Inicio de grabación", "Recording started"))
             _state.value = _state.value.copy(error = null)
             flushInternal(true)
             publish()
@@ -66,7 +67,7 @@ class TelemetryRecorder(
         if (reading.pidId != pid.id || reading.units != pid.units || !reading.decodedValue.isFinite() || !reading.value.isFinite()) return@serial
         try {
             if (active.context != context || reading.isSimulated != active.isSimulated) {
-                finish(RecordingEnd.INTERRUPTED, "Cambió el vehículo o el origen de los datos")
+                finish(RecordingEnd.INTERRUPTED, tr("Cambió el vehículo o el origen de los datos", "Vehicle or data source changed"))
                 return@serial
             }
             writer!!.write(csvRow(prefix("SENSOR", reading.timestamp, reading.receivedAtNanos) + listOf(
@@ -86,22 +87,22 @@ class TelemetryRecorder(
         try { flushInternal(true) } catch (e: IOException) { fail(e) }
     }
 
-    suspend fun stop(reason: String = "Detenida por el usuario", end: RecordingEnd = RecordingEnd.COMPLETED) = serial {
+    suspend fun stop(reason: String = tr("Detenida por el usuario", "Stopped by user"), end: RecordingEnd = RecordingEnd.COMPLETED) = serial {
         if (session == null) return@serial
         try { finish(end, reason) } catch (e: IOException) { fail(e) }
     }
 
     suspend fun delete(id: String) = serial {
         initialize()
-        require(_state.value.sessions.any { it.id == id } && session?.id != id) { "La sesión no está finalizada" }
-        if (csvFile(id).exists() && !csvFile(id).delete()) throw IOException("No se pudo eliminar el CSV")
-        if (!infoFile(id).delete()) throw IOException("No se pudo eliminar la información de la sesión")
+        require(_state.value.sessions.any { it.id == id } && session?.id != id) { tr("La sesión no está finalizada", "Session is not finished") }
+        if (csvFile(id).exists() && !csvFile(id).delete()) throw IOException(tr("No se pudo eliminar el CSV", "Could not delete CSV file"))
+        if (!infoFile(id).delete()) throw IOException(tr("No se pudo eliminar la información de la sesión", "Could not delete session info"))
         publish()
     }
 
     suspend fun export(id: String, destination: OutputStream) = serial {
         initialize()
-        require(_state.value.sessions.any { it.id == id } && session?.id != id) { "Detén la grabación antes de exportarla" }
+        require(_state.value.sessions.any { it.id == id } && session?.id != id) { tr("Detén la grabación antes de exportarla", "Stop recording before exporting") }
         csvFile(id).inputStream().use { it.copyTo(destination) }
     }
 
@@ -142,25 +143,27 @@ class TelemetryRecorder(
         val active = session
         runCatching { writer?.close() }
         writer = null; output = null; session = null
+        val storageFallback = tr("Error de almacenamiento", "Storage error")
         if (active != null) runCatching {
             val samples = recoverCsv(csvFile(active.id))
             persist(active.copy(endedAtMillis = nowMillis(), sampleCount = samples, end = RecordingEnd.ERROR,
-                reason = error.message ?: "Error de almacenamiento", bytes = csvFile(active.id).length()))
+                reason = error.message ?: storageFallback, bytes = csvFile(active.id).length()))
         }
         runCatching { publish() }
-        _state.value = _state.value.copy(active = null, error = "No se pudo guardar la grabación: ${error.message ?: "error de almacenamiento"}")
+        val detail = error.message ?: tr("error de almacenamiento", "storage error")
+        _state.value = _state.value.copy(active = null, error = tr("No se pudo guardar la grabación: $detail", "Could not save recording: $detail"))
     }
 
     private fun initialize() {
         if (initialized) return
-        if (!directory.exists() && !directory.mkdirs()) throw IOException("No se pudo crear el directorio de grabaciones")
+        if (!directory.exists() && !directory.mkdirs()) throw IOException(tr("No se pudo crear el directorio de grabaciones", "Could not create recordings directory"))
         val saved = loadSessions()
         saved.filter { it.end == null }.forEach { interrupted ->
             val file = csvFile(interrupted.id)
             val lastUpdate = file.lastModified().coerceAtLeast(interrupted.startedAtMillis)
             val samples = recoverCsv(file)
             persist(interrupted.copy(endedAtMillis = lastUpdate, sampleCount = samples, bytes = file.length(),
-                end = RecordingEnd.INTERRUPTED, reason = "El proceso terminó antes de cerrar la sesión"))
+                end = RecordingEnd.INTERRUPTED, reason = tr("El proceso terminó antes de cerrar la sesión", "Process ended before closing the session")))
         }
         initialized = true
         publish()
@@ -177,7 +180,7 @@ class TelemetryRecorder(
         }
         val temporary = File(directory, "${record.id}.info.tmp")
         FileOutputStream(temporary).use { properties.store(it, null); it.fd.sync() }
-        if (!temporary.renameTo(infoFile(record.id))) throw IOException("No se pudo guardar la información de la sesión")
+        if (!temporary.renameTo(infoFile(record.id))) throw IOException(tr("No se pudo guardar la información de la sesión", "Could not save session info"))
     }
 
     private fun loadSessions(): List<RecordingSession> = directory.listFiles().orEmpty().filter { it.extension == "info" }.mapNotNull { file ->

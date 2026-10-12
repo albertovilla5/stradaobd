@@ -1,18 +1,52 @@
 package com.torqueobd2.dash.data.model
 
+import com.torqueobd2.dash.i18n.tr
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-enum class DiagnosticStatus(val label: String) {
-    OK("Lectura completa"), PARTIAL("Lectura parcial"), NO_DATA("Sin respuesta / sin datos"),
-    UNSUPPORTED("Modo no admitido"), INVALID("Respuesta inválida")
+enum class DiagnosticStatus {
+    OK, PARTIAL, NO_DATA, UNSUPPORTED, INVALID;
+
+    val label: String
+        get() = when (this) {
+            OK -> tr("Lectura completa", "Complete reading")
+            PARTIAL -> tr("Lectura parcial", "Partial reading")
+            NO_DATA -> tr("Sin respuesta / sin datos", "No response / no data")
+            UNSUPPORTED -> tr("Modo no admitido", "Unsupported mode")
+            INVALID -> tr("Respuesta inválida", "Invalid response")
+        }
 }
-enum class DtcKind(val mode: String, val label: String, val explanation: String) {
-    CONFIRMED("03", "Confirmados", "Averías de emisiones almacenadas por la ECU."),
-    PENDING("07", "Pendientes", "Detectadas durante el ciclo actual o el último completado; pueden no encender el testigo."),
-    PERMANENT("0A", "Permanentes", "La ECU los elimina cuando verifica la reparación. El borrado estándar no los elimina.")
+
+enum class DtcKind(val mode: String) {
+    CONFIRMED("03"),
+    PENDING("07"),
+    PERMANENT("0A");
+
+    val label: String
+        get() = when (this) {
+            CONFIRMED -> tr("Confirmados", "Confirmed")
+            PENDING -> tr("Pendientes", "Pending")
+            PERMANENT -> tr("Permanentes", "Permanent")
+        }
+
+    val explanation: String
+        get() = when (this) {
+            CONFIRMED -> tr(
+                "Averías de emisiones almacenadas por la ECU.",
+                "Emissions trouble codes stored by the ECU."
+            )
+            PENDING -> tr(
+                "Detectadas durante el ciclo actual o el último completado; pueden no encender el testigo.",
+                "Detected during the current or last completed driving cycle; may not illuminate the MIL."
+            )
+            PERMANENT -> tr(
+                "La ECU los elimina cuando verifica la reparación. El borrado estándar no los elimina.",
+                "Cleared only by the ECU after verifying the repair. Standard clearing does not remove them."
+            )
+        }
 }
+
 data class DiagnosticFrame(val ecu: String, val bytes: List<Int>, val can: Boolean?)
 data class DiagnosticReply(val status: DiagnosticStatus, val frames: List<DiagnosticFrame> = emptyList(),
     val issues: List<String> = emptyList())
@@ -33,31 +67,37 @@ data class DiagnosticReport(val vehicleId: String, val vehicleName: String, val 
     val codes get() = batches.flatMap { it.codes }
     val complete get() = batches.all { it.status == DiagnosticStatus.OK } && monitorStatus == DiagnosticStatus.OK && freezeFrame.status == DiagnosticStatus.OK
     fun asText(description: (String) -> String): String = buildString {
-        appendLine("Torque OBD2 Dash · Informe de averías")
-        appendLine(if (simulated) "SIMULACIÓN · DATOS FICTICIOS" else "Lecturas OBD de emisiones")
-        appendLine("Vehículo: $vehicleName")
-        appendLine("Adaptador: $adapterName")
-        appendLine("Fecha: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z", Locale.US).format(Date(capturedAt))}")
-        appendLine("Este informe es una captura; no sustituye una nueva consulta a la ECU.")
+        appendLine(tr("StradaOBD · Informe de averías", "StradaOBD · Fault Report"))
+        appendLine(
+            if (simulated) tr("SIMULACIÓN · DATOS FICTICIOS", "SIMULATION · TEST DATA")
+            else tr("Lecturas OBD de emisiones", "OBD emissions readings")
+        )
+        appendLine(tr("Vehículo: $vehicleName", "Vehicle: $vehicleName"))
+        appendLine(tr("Adaptador: $adapterName", "Adapter: $adapterName"))
+        appendLine("${tr("Fecha", "Date")}: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z", Locale.US).format(Date(capturedAt))}")
+        appendLine(tr("Este informe es una captura; no sustituye una nueva consulta a la ECU.", "This report is a snapshot; it does not replace a new ECU query."))
         appendLine()
-        appendLine("Testigo MIL y monitores desde el último borrado: ${monitorStatus.label}")
+        appendLine(tr("Testigo MIL y monitores desde el último borrado: ${monitorStatus.label}", "MIL indicator and monitors since last clear: ${monitorStatus.label}"))
         monitors.forEach { ecu ->
-            appendLine("ECU ${ecu.ecu}: MIL ${if (ecu.milOn) "encendido" else "apagado"}; ${ecu.confirmedCount} DTC confirmados declarados")
-            ecu.monitors.forEach { appendLine("  ${it.name}: ${if (it.complete) "Completado" else "Pendiente"}") }
+            val milState = if (ecu.milOn) tr("encendido", "ON") else tr("apagado", "OFF")
+            appendLine(tr("ECU ${ecu.ecu}: MIL $milState; ${ecu.confirmedCount} DTC confirmados declarados", "ECU ${ecu.ecu}: MIL $milState; ${ecu.confirmedCount} confirmed DTCs reported"))
+            ecu.monitors.forEach { appendLine("  ${it.name}: ${if (it.complete) tr("Completado", "Complete") else tr("Pendiente", "Incomplete")}") }
         }
         batches.forEach { batch ->
             appendLine(); appendLine("${batch.kind.label}: ${batch.status.label}")
-            if (batch.codes.isEmpty() && batch.status == DiagnosticStatus.OK) appendLine("Sin códigos en las ECU que respondieron: ${batch.respondingEcus.joinToString()}")
+            if (batch.codes.isEmpty() && batch.status == DiagnosticStatus.OK) {
+                appendLine(tr("Sin códigos en las ECU que respondieron: ${batch.respondingEcus.joinToString()}", "No codes in responding ECUs: ${batch.respondingEcus.joinToString()}"))
+            }
             batch.codes.forEach { appendLine("${it.code} · ECU ${it.ecu} · ${description(it.code)}") }
-            batch.issues.forEach { appendLine("Aviso: $it") }
+            batch.issues.forEach { appendLine(tr("Aviso: $it", "Warning: $it")) }
         }
-        appendLine(); appendLine("Datos congelados · cuadro ${freezeFrame.frameNumber}: ${freezeFrame.status.label}")
-        freezeFrame.triggeringCodes.forEach { (ecu, code) -> appendLine("ECU $ecu: originado por $code") }
+        appendLine(); appendLine(tr("Datos congelados · cuadro ${freezeFrame.frameNumber}: ${freezeFrame.status.label}", "Freeze frame · frame ${freezeFrame.frameNumber}: ${freezeFrame.status.label}"))
+        freezeFrame.triggeringCodes.forEach { (ecu, code) -> appendLine(tr("ECU $ecu: originado por $code", "ECU $ecu: triggered by $code")) }
         freezeFrame.values.forEach { appendLine("ECU ${it.ecu}: ${it.name} = ${String.format(Locale.US, "%.2f", it.value)} ${it.unit}") }
-        freezeFrame.issues.forEach { appendLine("Aviso: $it") }
-        appendLine("Los códigos permanentes solo los elimina la ECU tras verificar la reparación.")
-        appendLine("Un código identifica una condición detectada; no confirma qué pieza necesita sustitución.")
-        appendLine(); appendLine("Respuestas originales:")
+        freezeFrame.issues.forEach { appendLine(tr("Aviso: $it", "Warning: $it")) }
+        appendLine(tr("Los códigos permanentes solo los elimina la ECU tras verificar la reparación.", "Permanent codes are only cleared by the ECU after verifying the repair."))
+        appendLine(tr("Un código identifica una condición detectada; no confirma qué pieza necesita sustitución.", "A code identifies a detected condition; it does not confirm which part needs replacement."))
+        appendLine(); appendLine(tr("Respuestas originales:", "Raw responses:"))
         rawResponses.forEach { (command, raw) -> appendLine("> $command\n${raw.trim()}") }
     }
 }

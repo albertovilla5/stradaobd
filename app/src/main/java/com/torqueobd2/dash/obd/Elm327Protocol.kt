@@ -1,5 +1,7 @@
 package com.torqueobd2.dash.obd
 
+import com.torqueobd2.dash.i18n.tr
+
 /**
  * Utilidades para el protocolo ELM327, tramas OBD-II y diagnóstico de respuestas.
  */
@@ -28,31 +30,58 @@ object Elm327Protocol {
         val upper = raw.uppercase()
         return when {
             upper.contains("UNABLE TO CONNECT") ->
-                "La centralita del vehículo no responde (UNABLE TO CONNECT). Comprueba que el contacto del coche esté en posición ON (cuadro de mandos encendido o motor en marcha) y que el adaptador esté firmemente encajado en la toma OBD2."
+                tr(
+                    "La centralita del vehículo no responde (UNABLE TO CONNECT). Comprueba que el contacto del coche esté en posición ON (cuadro de mandos encendido o motor en marcha) y que el adaptador esté firmemente encajado en la toma OBD2.",
+                    "The vehicle ECU is not responding (UNABLE TO CONNECT). Check that the ignition is in the ON position (dashboard lit or engine running) and the adapter is firmly plugged into the OBD2 port."
+                )
 
             upper.contains("BUS INIT: ... ERROR") || upper.contains("BUS INIT: ERROR") ->
-                "Error en la inicialización del bus OBD del coche. Asegúrate de que el contacto esté dado y que el protocolo seleccionado sea compatible con tu vehículo."
+                tr(
+                    "Error en la inicialización del bus OBD del coche. Asegúrate de que el contacto esté dado y que el protocolo seleccionado sea compatible con tu vehículo.",
+                    "Vehicle OBD bus initialization error. Make sure the ignition is on and the selected protocol is compatible with your vehicle."
+                )
 
             upper.contains("CAN ERROR") ->
-                "Error en el bus CAN del vehículo. Puede deberse a una interferencia en la línea o un pin del conector OBD flojo."
+                tr(
+                    "Error en el bus CAN del vehículo. Puede deberse a una interferencia en la línea o un pin del conector OBD flojo.",
+                    "Vehicle CAN bus error. This may be caused by line interference or a loose OBD connector pin."
+                )
 
             upper.contains("BUS BUSY") ->
-                "El bus de datos del coche está saturado o ocupado por otra centralita. Reintentando..."
+                tr(
+                    "El bus de datos del coche está saturado o ocupado por otra centralita. Reintentando...",
+                    "The vehicle data bus is busy or saturated by another module. Retrying..."
+                )
 
             upper.contains("FB ERROR") ->
-                "Error de feedback (retroalimentación) en el circuito del adaptador ELM327. Es común en clones defectuosos o cuando el pin del bus tiene tensión anormal."
+                tr(
+                    "Error de feedback (retroalimentación) en el circuito del adaptador ELM327. Es común en clones defectuosos o cuando el pin del bus tiene tensión anormal.",
+                    "Feedback error in the ELM327 adapter circuit. Common on faulty clones or when bus pin voltage is abnormal."
+                )
 
             upper.contains("DATA ERROR") || upper.contains("ERR") ->
-                "Error de suma de comprobación (checksum) o datos corruptos recibidos desde la centralita."
+                tr(
+                    "Error de suma de comprobación (checksum) o datos corruptos recibidos desde la centralita.",
+                    "Checksum error or corrupted data received from the ECU."
+                )
 
             upper.contains("STOPPED") ->
-                "Comando interrumpido por el usuario o por timeout del adaptador."
+                tr(
+                    "Comando interrumpido por el usuario o por timeout del adaptador.",
+                    "Command interrupted by user or adapter timeout."
+                )
 
             upper.trim() == "?" ->
-                "Comando no reconocido por el chip ELM327. Comprueba la sintaxis del comando enviado."
+                tr(
+                    "Comando no reconocido por el chip ELM327. Comprueba la sintaxis del comando enviado.",
+                    "Command not recognized by the ELM327 chip. Check the syntax of the sent command."
+                )
 
             upper.contains("BUFFER FULL") ->
-                "El búfer interno del adaptador ELM327 se ha llenado. Se recomienda reducir la frecuencia de comandos."
+                tr(
+                    "El búfer interno del adaptador ELM327 se ha llenado. Se recomienda reducir la frecuencia de comandos.",
+                    "The ELM327 adapter internal buffer is full. Consider reducing command polling frequency."
+                )
 
             else -> null
         }

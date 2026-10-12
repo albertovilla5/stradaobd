@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Reglas de copia de seguridad automática de Android (API 23 a 30 / Android 6 a 11).
+    Al declarar elementos <include>, Android utiliza una lista blanca estricta y respalda
+    únicamente las preferencias de usuario (vehículos, dashboards, sensores, alertas e interfaz),
+    excluyendo automáticamente credenciales/direcciones MAC de conexión (obd_connection.xml),
+    estado local del dispositivo y grabaciones de telemetría.
+-->
+<full-backup-content>
+    <include domain="sharedpref" path="torque_obd_prefs.xml" />
+    <include domain="sharedpref" path="torque_sensors.xml" />
+    <include domain="sharedpref" path="sensor_alerts.xml" />
+    <include domain="sharedpref" path="interface.xml" />
+</full-backup-content>

@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
 import com.torqueobd2.dash.data.model.ConnectionStatus
+import com.torqueobd2.dash.i18n.tr
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CancellationException
@@ -54,7 +55,7 @@ class BluetoothObdConnection(
     private val _status = MutableStateFlow(ConnectionStatus.DISCONNECTED)
     override val status: StateFlow<ConnectionStatus> = _status.asStateFlow()
 
-    private val _statusMessage = MutableStateFlow("Desconectado")
+    private val _statusMessage = MutableStateFlow(tr("Desconectado", "Disconnected"))
     override val statusMessage: StateFlow<String> = _statusMessage.asStateFlow()
 
     private var socket: BluetoothSocket? = null
@@ -69,9 +70,13 @@ class BluetoothObdConnection(
     @SuppressLint("MissingPermission")
     override suspend fun connect(): Boolean = withContext(Dispatchers.IO) {
         try {
+            @Suppress("DEPRECATION")
             val adapter = BluetoothAdapter.getDefaultAdapter()
             if (adapter == null) {
-                val msg = "Hardware Bluetooth no disponible en este dispositivo."
+                val msg = tr(
+                    "Hardware Bluetooth no disponible en este dispositivo.",
+                    "Bluetooth hardware is not available on this device."
+                )
                 _status.value = ConnectionStatus.ERROR
                 _statusMessage.value = msg
                 log("❌ $msg")
@@ -79,7 +84,10 @@ class BluetoothObdConnection(
             }
 
             if (!adapter.isEnabled) {
-                val msg = "Bluetooth desactivado. Por favor, activa el Bluetooth en los ajustes del teléfono."
+                val msg = tr(
+                    "Bluetooth desactivado. Por favor, activa el Bluetooth en los ajustes del teléfono.",
+                    "Bluetooth is disabled. Please enable Bluetooth in system settings."
+                )
                 _status.value = ConnectionStatus.ERROR
                 _statusMessage.value = msg
                 log("❌ $msg")
@@ -87,13 +95,16 @@ class BluetoothObdConnection(
             }
 
             _status.value = ConnectionStatus.CONNECTING
-            _statusMessage.value = "Conectando a $deviceAddress..."
-            log("🔌 Buscando dispositivo emparejado $deviceAddress...")
+            _statusMessage.value = tr("Conectando a $deviceAddress...", "Connecting to $deviceAddress...")
+            log(tr("🔌 Buscando dispositivo emparejado $deviceAddress...", "🔌 Looking up paired device $deviceAddress..."))
 
             val device: BluetoothDevice = try {
                 adapter.getRemoteDevice(deviceAddress)
             } catch (e: IllegalArgumentException) {
-                val err = "Dirección MAC Bluetooth inválida ($deviceAddress)"
+                val err = tr(
+                    "Dirección MAC Bluetooth inválida ($deviceAddress)",
+                    "Invalid Bluetooth MAC address ($deviceAddress)"
+                )
                 _status.value = ConnectionStatus.ERROR
                 _statusMessage.value = err
                 log("❌ $err")
@@ -101,18 +112,18 @@ class BluetoothObdConnection(
             }
 
             val deviceName = try { device.name ?: deviceAddress } catch (_: Exception) { deviceAddress }
-            log("Dispositivo seleccionado: $deviceName ($deviceAddress)")
+            log(tr("Dispositivo seleccionado: $deviceName ($deviceAddress)", "Selected device: $deviceName ($deviceAddress)"))
 
             // Cancelar descubrimiento Bluetooth para no ralentizar el handshake de conexión
             try {
                 if (adapter.isDiscovering) {
                     adapter.cancelDiscovery()
-                    log("Búsqueda de dispositivos cancelada para liberar ancho de banda.")
+                    log(tr("Búsqueda de dispositivos cancelada para liberar ancho de banda.", "Device discovery cancelled to free bandwidth."))
                 }
             } catch (_: Exception) {}
 
             // Intento 1: Conexión mediante UUID SPP estándar
-            log("Intentando enlace RFCOMM con UUID SPP estándar...")
+            log(tr("Intentando enlace RFCOMM con UUID SPP estándar...", "Attempting RFCOMM link with standard SPP UUID..."))
             var connectedSocket: BluetoothSocket? = null
 
             try {
@@ -120,10 +131,15 @@ class BluetoothObdConnection(
                 socket = s
                 connectSocket(s)
                 connectedSocket = s
-                log("✅ Conexión establecida mediante UUID SPP estándar.")
+                log(tr("✅ Conexión establecida mediante UUID SPP estándar.", "✅ Connection established via standard SPP UUID."))
             } catch (e: IOException) {
                 try { socket?.close() } catch (_: IOException) {}
-                log("⚠️ Falló conexión por UUID estándar: ${e.message}. Probando método fallback (Canal RFCOMM 1)...")
+                log(
+                    tr(
+                        "⚠️ Falló conexión por UUID estándar: ${e.message}. Probando método fallback (Canal RFCOMM 1)...",
+                        "⚠️ Standard UUID connection failed: ${e.message}. Trying fallback method (RFCOMM channel 1)..."
+                    )
+                )
             }
 
             currentCoroutineContext().ensureActive()
@@ -136,18 +152,21 @@ class BluetoothObdConnection(
                     socket = fallbackSocket
                     connectSocket(fallbackSocket)
                     connectedSocket = fallbackSocket
-                    log("✅ Conexión establecida con éxito mediante canal alternativo RFCOMM 1.")
+                    log(tr("✅ Conexión establecida con éxito mediante canal alternativo RFCOMM 1.", "✅ Connection established via fallback RFCOMM channel 1."))
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     try { socket?.close() } catch (_: IOException) {}
-                    log("❌ Falló también el método fallback: ${e.message}")
+                    log(tr("❌ Falló también el método fallback: ${e.message}", "❌ Fallback method also failed: ${e.message}"))
                 }
             }
 
             if (connectedSocket == null || !connectedSocket.isConnected) {
                 disconnect()
-                val detailedErr = "No se pudo conectar a $deviceName. Verifica que el adaptador ELM327 esté conectado al coche, con el LED de alimentación encendido y la llave en contacto."
+                val detailedErr = tr(
+                    "No se pudo conectar a $deviceName. Verifica que el adaptador ELM327 esté conectado al coche, con el LED de alimentación encendido y la llave en contacto.",
+                    "Could not connect to $deviceName. Make sure the ELM327 adapter is plugged into the car, its power LED is on, and the ignition is switched on."
+                )
                 _status.value = ConnectionStatus.ERROR
                 _statusMessage.value = detailedErr
                 log("❌ $detailedErr")
@@ -159,8 +178,8 @@ class BluetoothObdConnection(
             outputStream = connectedSocket.outputStream
 
             _status.value = ConnectionStatus.INITIALIZING_ELM
-            _statusMessage.value = "Inicializando chip ELM327..."
-            log("⚙️ Inicializando chip ELM327...")
+            _statusMessage.value = tr("Inicializando chip ELM327...", "Initializing ELM327 chip...")
+            log(tr("⚙️ Inicializando chip ELM327...", "⚙️ Initializing ELM327 chip..."))
 
             // Pequeña pausa de 300ms para estabilizar el microcontrolador ELM327 tras la apertura del socket
             delay(300)
@@ -186,12 +205,12 @@ class BluetoothObdConnection(
                 // Si hay diagnóstico de error del adaptador o ECU, notificarlo
                 val diag = Elm327Protocol.diagnoseResponseError(response)
                 if (diag != null) {
-                    log("  ℹ️ Diagnóstico ELM: $diag")
+                    log(tr("  ℹ️ Diagnóstico ELM: $diag", "  ℹ️ ELM Diagnostic: $diag"))
                 }
             }
 
             // Comprobación inicial de la centralita con comando PID 0100 (PIDs soportados 01-20)
-            log("  > 0100 (Prueba de enlace con la ECU del coche)")
+            log(tr("  > 0100 (Prueba de enlace con la ECU del coche)", "  > 0100 (Vehicle ECU link test)"))
             val ecuTest = sendCommandInternal("0100", 5000L)
             log("  < ${ecuTest.trim()}")
 
@@ -199,12 +218,12 @@ class BluetoothObdConnection(
             if (ecuDiag != null) {
                 log("  ⚠️ $ecuDiag")
             } else if (ecuTest.contains("41 00") || ecuTest.contains("4100")) {
-                log("  ✅ ECU respondió satisfactoriamente (Protocolo establecido).")
+                log(tr("  ✅ ECU respondió satisfactoriamente (Protocolo establecido).", "  ✅ ECU responded successfully (Protocol established)."))
             }
 
             _status.value = ConnectionStatus.CONNECTED
-            _statusMessage.value = "Conectado a $deviceName"
-            log("🚀 Conexión completa y activa con $deviceName.")
+            _statusMessage.value = tr("Conectado a $deviceName", "Connected to $deviceName")
+            log(tr("🚀 Conexión completa y activa con $deviceName.", "🚀 Full active connection established with $deviceName."))
             true
         } catch (e: CancellationException) {
             try { socket?.close() } catch (_: IOException) {}
@@ -212,7 +231,10 @@ class BluetoothObdConnection(
             throw e
         } catch (e: Exception) {
             disconnect()
-            val errMsg = "Error inesperado al conectar: ${e.localizedMessage ?: e.javaClass.simpleName}"
+            val errMsg = tr(
+                "Error inesperado al conectar: ${e.localizedMessage ?: e.javaClass.simpleName}",
+                "Unexpected connection error: ${e.localizedMessage ?: e.javaClass.simpleName}"
+            )
             _status.value = ConnectionStatus.ERROR
             _statusMessage.value = errMsg
             log("❌ $errMsg")
@@ -233,7 +255,13 @@ class BluetoothObdConnection(
         try {
             target.connect()
         } catch (e: SecurityException) {
-            throw IOException("Android denegó el permiso de conexión Bluetooth: ${e.message}", e)
+            throw IOException(
+                tr(
+                    "Android denegó el permiso de conexión Bluetooth: ${e.message}",
+                    "Android denied Bluetooth connection permission: ${e.message}"
+                ),
+                e
+            )
         } finally {
             finished.set(true)
             timeout.cancel()
@@ -242,7 +270,7 @@ class BluetoothObdConnection(
     }
 
     override suspend fun disconnect() = withContext(Dispatchers.IO) {
-        log("Cerrando conexión Bluetooth...")
+        log(tr("Cerrando conexión Bluetooth...", "Closing Bluetooth connection..."))
         try {
             inputStream?.close()
         } catch (_: Exception) {}
@@ -257,8 +285,8 @@ class BluetoothObdConnection(
         outputStream = null
         socket = null
         _status.value = ConnectionStatus.DISCONNECTED
-        _statusMessage.value = "Desconectado"
-        log("Conexión finalizada.")
+        _statusMessage.value = tr("Desconectado", "Disconnected")
+        log(tr("Conexión finalizada.", "Connection closed."))
     }
 
     override fun isConnected(): Boolean {
@@ -296,7 +324,7 @@ class BluetoothObdConnection(
                     val len = inStream.read(buffer)
                     if (len == -1) {
                         _status.value = ConnectionStatus.DISCONNECTED
-                        throw IOException("Socket Bluetooth cerrado por el dispositivo (EOF)")
+                        throw IOException(tr("Socket Bluetooth cerrado por el dispositivo (EOF)", "Bluetooth socket closed by device (EOF)"))
                     }
                     if (len > 0) {
                         for (i in 0 until len) {
@@ -314,7 +342,7 @@ class BluetoothObdConnection(
                 } else {
                     if (socket?.isConnected != true) {
                         _status.value = ConnectionStatus.DISCONNECTED
-                        throw IOException("Socket Bluetooth desconectado")
+                        throw IOException(tr("Socket Bluetooth desconectado", "Bluetooth socket disconnected"))
                     }
                     delay(2)
                 }
@@ -322,12 +350,17 @@ class BluetoothObdConnection(
 
             val result = sb.toString()
             if (!result.contains('>')) {
-                throw IOException("Sin respuesta completa del adaptador a $command en ${timeoutMs}ms")
+                throw IOException(
+                    tr(
+                        "Sin respuesta completa del adaptador a $command en ${timeoutMs}ms",
+                        "No complete response from adapter to $command within ${timeoutMs}ms"
+                    )
+                )
             }
             return result
         } catch (e: IOException) {
             _status.value = ConnectionStatus.DISCONNECTED
-            log("❌ Pérdida de conexión con ELM327: ${e.message}")
+            log(tr("❌ Pérdida de conexión con ELM327: ${e.message}", "❌ Lost connection to ELM327: ${e.message}"))
             throw e
         } catch (e: CancellationException) {
             throw e
@@ -336,3 +369,4 @@ class BluetoothObdConnection(
         }
     }
 }
+

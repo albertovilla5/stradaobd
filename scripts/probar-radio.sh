@@ -38,9 +38,9 @@ if ! "$adb_bin" -s "$device_serial" install -r "$apk_path" > "$report_dir/instal
 fi
 cat "$report_dir/install.txt"
 launch_status=0
-"$adb_bin" -s "$device_serial" shell am start -W -n com.torqueobd2.dash/.MainActivity > "$report_dir/launch.txt" 2>&1 || launch_status=$?
+"$adb_bin" -s "$device_serial" shell am start -W -n com.stradaobd.dash/.MainActivity > "$report_dir/launch.txt" 2>&1 || launch_status=$?
 sleep 3
-"$adb_bin" -s "$device_serial" shell pidof com.torqueobd2.dash > "$report_dir/process.txt" || true
+"$adb_bin" -s "$device_serial" shell pidof com.stradaobd.dash > "$report_dir/process.txt" || true
 "$adb_bin" -s "$device_serial" logcat -d -t 300 -v threadtime AndroidRuntime:E '*:S' > "$report_dir/crashes.txt" || true
 if [ "$launch_status" -ne 0 ] || ! grep -q '^Status: ok' "$report_dir/launch.txt" || [ ! -s "$report_dir/process.txt" ]; then
     echo "No se ha confirmado el arranque. Revisa launch.txt y crashes.txt en el informe."

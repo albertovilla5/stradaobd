@@ -144,6 +144,8 @@ import com.torqueobd2.dash.data.model.telemetryText
 import com.torqueobd2.dash.data.model.DashboardDensity
 import com.torqueobd2.dash.data.model.WidgetType
 import com.torqueobd2.dash.data.repository.DefaultPids
+import com.torqueobd2.dash.i18n.tr
+import com.torqueobd2.dash.i18n.trUnit
 import com.torqueobd2.dash.ui.components.AnalogGauge
 import com.torqueobd2.dash.ui.components.ControlPedalSlider
 import com.torqueobd2.dash.ui.components.RealtimeChart
@@ -193,8 +195,8 @@ fun CustomDashboardScreen(
     onAddSensors: (List<String>) -> Unit,
     fullScreen: Boolean,
     onFullScreenChanged: (Boolean) -> Unit,
-    onEditModeChanged: (Boolean) -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onEditModeChanged: (Boolean) -> Unit = {}
 ) {
     val haptic = LocalHapticFeedback.current
     val car = LocalCarMode.current
@@ -236,52 +238,52 @@ fun CustomDashboardScreen(
         selectedSlot?.let { slot ->
             val widget = customDashboard.getWidgetForSlot(slot)
             if (widget == null) {
-                add(DashboardEditorAction(Icons.Default.Add, "Añadir aquí", "Ranura ${slot + 1}") {
+                add(DashboardEditorAction(Icons.Default.Add, tr("Añadir aquí", "Add here"), tr("Ranura ${slot + 1}", "Slot ${slot + 1}")) {
                     targetSlotForAdd = slot; showAddDialog = true
                 })
             } else {
-                add(DashboardEditorAction(Icons.Default.Edit, "Editar indicador") {
+                add(DashboardEditorAction(Icons.Default.Edit, tr("Editar indicador", "Edit gauge")) {
                     targetSlotForAdd = slot; showAddDialog = true
                 })
-                add(DashboardEditorAction(Icons.Default.SwapVert, "Mover / intercambiar") {
+                add(DashboardEditorAction(Icons.Default.SwapVert, tr("Mover / intercambiar", "Move / swap")) {
                     transferSource = slot; duplicateWidget = false
                 })
-                add(DashboardEditorAction(Icons.Default.Add, "Duplicar indicador") {
+                add(DashboardEditorAction(Icons.Default.Add, tr("Duplicar indicador", "Duplicate gauge")) {
                     transferSource = slot; duplicateWidget = true
                 })
-                add(DashboardEditorAction(Icons.Default.Delete, "Vaciar ranura") {
+                add(DashboardEditorAction(Icons.Default.Delete, tr("Vaciar ranura", "Clear slot")) {
                     onClearSlot(slot); selectedSlot = null
                 })
             }
         }
-        add(DashboardEditorAction(Icons.Default.Add, "Añadir indicador") {
+        add(DashboardEditorAction(Icons.Default.Add, tr("Añadir indicador", "Add gauge")) {
             targetSlotForAdd = (0 until customDashboard.gridLayout.slotCount).firstOrNull {
                 customDashboard.getWidgetForSlot(it) == null
             }
             selectedSlot = targetSlotForAdd
             if (targetSlotForAdd == null) showGridDialog = true else showAddDialog = true
         })
-        add(DashboardEditorAction(Icons.Default.Add, "Añadir varios indicadores") {
+        add(DashboardEditorAction(Icons.Default.Add, tr("Añadir varios indicadores", "Add multiple gauges")) {
             if (customDashboard.getSlotList().all { it != null }) showGridDialog = true else showBulkSensors = true
         })
-        add(DashboardEditorAction(Icons.Default.DashboardCustomize, "Disposición de rejilla", (if (car) customDashboard.gridLayout.carBadge else customDashboard.gridLayout.badge)) {
+        add(DashboardEditorAction(Icons.Default.DashboardCustomize, tr("Disposición de rejilla", "Grid layout"), (if (car) customDashboard.gridLayout.carBadge else customDashboard.gridLayout.badge)) {
             showGridDialog = true
         })
         if (!car) add(DashboardEditorAction(Icons.Default.Tune,
-            if (customDashboard.density == DashboardDensity.COMPACT) "Presentación normal" else "Presentación compacta") {
+            if (customDashboard.density == DashboardDensity.COMPACT) tr("Presentación normal", "Normal density") else tr("Presentación compacta", "Compact density")) {
             onDensityChanged(if (customDashboard.density == DashboardDensity.COMPACT) DashboardDensity.COMFORTABLE else DashboardDensity.COMPACT)
         })
-        add(DashboardEditorAction(Icons.Default.Style, "Plantillas") { showPresetsDialog = true })
-        add(DashboardEditorAction(Icons.Default.Add, "Nueva pestaña") { showCreateTab = true })
-        add(DashboardEditorAction(Icons.Default.DriveFileRenameOutline, "Renombrar pestaña") { renameTabId = customDashboard.id })
-        add(DashboardEditorAction(Icons.Default.SwapVert, "Ordenar pestañas") { showOrderDialog = true })
-        add(DashboardEditorAction(Icons.Default.Add, "Duplicar pestaña") { onDuplicateTab(customDashboard.id) })
-        add(DashboardEditorAction(Icons.Default.Delete, "Eliminar pestaña",
-            detail = if (customDashboards.dashboards.size == 1) "Conserva al menos una" else null,
+        add(DashboardEditorAction(Icons.Default.Style, tr("Plantillas", "Templates")) { showPresetsDialog = true })
+        add(DashboardEditorAction(Icons.Default.Add, tr("Nueva pestaña", "New tab")) { showCreateTab = true })
+        add(DashboardEditorAction(Icons.Default.DriveFileRenameOutline, tr("Renombrar pestaña", "Rename tab")) { renameTabId = customDashboard.id })
+        add(DashboardEditorAction(Icons.Default.SwapVert, tr("Ordenar pestañas", "Reorder tabs")) { showOrderDialog = true })
+        add(DashboardEditorAction(Icons.Default.Add, tr("Duplicar pestaña", "Duplicate tab")) { onDuplicateTab(customDashboard.id) })
+        add(DashboardEditorAction(Icons.Default.Delete, tr("Eliminar pestaña", "Delete tab"),
+            detail = if (customDashboards.dashboards.size == 1) tr("Conserva al menos una", "Keep at least one") else null,
             enabled = customDashboards.dashboards.size > 1) { deleteTabId = customDashboard.id })
-        add(DashboardEditorAction(Icons.Default.Style, "Importar / exportar diseños") { showDesignFiles = true })
+        add(DashboardEditorAction(Icons.Default.Style, tr("Importar / exportar diseños", "Import / export designs")) { showDesignFiles = true })
         add(DashboardEditorAction(if (fullScreen) Icons.Default.Close else Icons.Default.OpenInFull,
-            if (fullScreen) "Salir de pantalla completa" else "Pantalla completa") {
+            if (fullScreen) tr("Salir de pantalla completa", "Exit full screen") else tr("Pantalla completa", "Full screen")) {
             finishEditing(); onFullScreenChanged(!fullScreen)
         })
     }
@@ -292,7 +294,7 @@ fun CustomDashboardScreen(
         val panelHeight = minOf(240.dp * fontScale, maxHeight * 0.52f)
         val panelColumns = if (sidePanel || maxWidth < 320.dp * fontScale) 1 else 2
         Column(Modifier.fillMaxSize()) {
-            if (car && fullScreen && isSimulationMode) Text("SIMULACIÓN · Datos de prueba",
+            if (car && fullScreen && isSimulationMode) Text(tr("SIMULACIÓN · Datos de prueba", "SIMULATION · Test data"),
                 color = NeonCyan, fontSize = 24.sp, modifier = Modifier.padding(bottom = 8.dp))
             // Las pestañas solo necesitan una fila cuando hay varios cuadros.
             key(customDashboards.dashboards.map { it.id }) {
@@ -323,7 +325,7 @@ fun CustomDashboardScreen(
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     scope.launch { pagerState.animateScrollToPage(customDashboards.dashboards.indexOf(dashboard)) }
                                 }.padding(horizontal = 10.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
-                                Text(dashboard.name, color = if (active) (if (car) CockpitAccent else RacingOrange) else TextMuted, fontSize = 12.sp,
+                                Text(dashboard.localizedName, color = if (active) (if (car) CockpitAccent else RacingOrange) else TextMuted, fontSize = 12.sp,
                                     fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
                                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
@@ -332,6 +334,7 @@ fun CustomDashboardScreen(
                 }
                 @Composable
                 fun DashboardCanvas(canvasModifier: Modifier) {
+                    val editDesc = tr("Editar dashboard", "Edit dashboard")
                     Box(canvasModifier) {
                         HorizontalPager(state = pagerState, key = { customDashboards.dashboards[it].id },
                             modifier = Modifier.fillMaxSize(), pageSpacing = 8.dp) { page ->
@@ -356,7 +359,7 @@ fun CustomDashboardScreen(
                         if (!isEditMode && !car && !fullScreen) {
                             Surface(onClick = { isEditMode = true },
                                 modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(if (car) 76.dp else 36.dp)
-                                    .semantics { contentDescription = "Editar dashboard" },
+                                    .semantics { contentDescription = editDesc },
                                 color = DarkSurface.copy(alpha = 0.9f), shape = CircleShape,
                                 border = BorderStroke(1.dp, RacingOrange.copy(alpha = 0.65f)), shadowElevation = 2.dp) {
                                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -364,7 +367,7 @@ fun CustomDashboardScreen(
                                 }
                             }
                             if (fullScreen && isSimulationMode) {
-                                Text("SIMULACIÓN", Modifier.align(Alignment.TopStart)
+                                Text(tr("SIMULACIÓN", "SIMULATION"), Modifier.align(Alignment.TopStart)
                                     .background(DarkSurface.copy(alpha = 0.9f), RoundedCornerShape(6.dp)).padding(6.dp),
                                     color = NeonCyan, fontSize = 10.sp)
                             }
@@ -376,11 +379,11 @@ fun CustomDashboardScreen(
                     Surface(Modifier.fillMaxWidth().height(dialogHeight), color = CockpitBackground, shape = RoundedCornerShape(28.dp)) {
                         Column(Modifier.fillMaxSize()) {
                             Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text("Cambiar panel", Modifier.weight(1f), color = TextWhite, fontSize = 28.sp)
-                                IconButton(onClick = { showCarPanels = false }) { Icon(Icons.Default.Close, "Cerrar selector de paneles") }
+                                Text(tr("Cambiar panel", "Switch panel"), Modifier.weight(1f), color = TextWhite, fontSize = 28.sp)
+                                IconButton(onClick = { showCarPanels = false }) { Icon(Icons.Default.Close, tr("Cerrar selector de paneles", "Close panel selector")) }
                             }
                             CarMenu(customDashboards.dashboards.mapIndexed { index, dashboard ->
-                                CarMenuEntry(dashboard.name, "${dashboard.gridLayout.slotCount} indicadores", Icons.Default.DashboardCustomize) {
+                                CarMenuEntry(dashboard.localizedName, tr("${dashboard.gridLayout.slotCount} indicadores", "${dashboard.gridLayout.slotCount} gauges"), Icons.Default.DashboardCustomize) {
                                     showCarPanels = false
                                     finishEditing()
                                     scope.launch { pagerState.animateScrollToPage(index) }
@@ -391,7 +394,7 @@ fun CustomDashboardScreen(
                 }
                 @Composable
                 fun EditorPanel(panelModifier: Modifier) {
-                    DashboardEditorPanel(customDashboard.name, selectedSlot, selectedSlot?.let(customDashboard::getWidgetForSlot)?.title,
+                    DashboardEditorPanel(customDashboard.localizedName, selectedSlot, selectedSlot?.let(customDashboard::getWidgetForSlot)?.localizedTitle,
                         editorActions, columns = panelColumns,
                         onClearSelection = { selectedSlot = null }, onDone = finishEditing, modifier = panelModifier)
                 }
@@ -399,8 +402,8 @@ fun CustomDashboardScreen(
                 else if (car) {
                     DashboardCanvas(Modifier.weight(1f).fillMaxWidth())
                     Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                        OutlinedButton(onClick = { showCarTools = true }, modifier = Modifier.weight(1f)) { Text("Herramientas") }
-                        Button(onClick = finishEditing, modifier = Modifier.weight(1f)) { Text("Listo") }
+                        OutlinedButton(onClick = { showCarTools = true }, modifier = Modifier.weight(1f)) { Text(tr("Herramientas", "Tools")) }
+                        Button(onClick = finishEditing, modifier = Modifier.weight(1f)) { Text(tr("Listo", "Done")) }
                     }
                 } else if (sidePanel) {
                     Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -426,11 +429,11 @@ fun CustomDashboardScreen(
             androidx.compose.material3.Surface(Modifier.fillMaxWidth().height(maxHeight), color = DarkSurface, shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.fillMaxSize()) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (selectedSlot == null) (if (compactToolsHeader) "Herramientas" else "Herramientas del panel") else "Indicador ${selectedSlot!! + 1}",
+                        Text(if (selectedSlot == null) (if (compactToolsHeader) tr("Herramientas", "Tools") else tr("Herramientas del panel", "Panel tools")) else tr("Indicador ${selectedSlot!! + 1}", "Gauge ${selectedSlot!! + 1}"),
                             Modifier.weight(1f), color = TextWhite, fontSize = 24.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (compactToolsHeader) IconButton(onClick = { showCarTools = false }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver al panel", tint = TextWhite)
-                        } else TextButton(onClick = { showCarTools = false }) { Text("Volver al panel") }
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, tr("Volver al panel", "Back to panel"), tint = TextWhite)
+                        } else TextButton(onClick = { showCarTools = false }) { Text(tr("Volver al panel", "Back to panel")) }
                     }
                     CarMenu(editorActions.map { action ->
                         CarMenuEntry(action.label, action.detail.orEmpty(), action.icon, enabled = action.enabled) {
@@ -441,14 +444,14 @@ fun CustomDashboardScreen(
             }
         }
     }
-    if (showCreateTab) DashboardTabNameDialog("Nueva pestaña", "", chooseLayout = true,
+    if (showCreateTab) DashboardTabNameDialog(tr("Nueva pestaña", "New tab"), "", chooseLayout = true,
         onDismiss = { showCreateTab = false }, onSave = { name, layout ->
             onCreateTab(name, layout)
             showCreateTab = false
         })
     renameTabId?.let { id ->
         val dashboard = customDashboards.dashboards.first { it.id == id }
-        DashboardTabNameDialog("Nombre de la pestaña", dashboard.name, onDismiss = { renameTabId = null },
+        DashboardTabNameDialog(tr("Nombre de la pestaña", "Tab name"), dashboard.localizedName, onDismiss = { renameTabId = null },
             onSave = { name, _ -> onRenameTab(id, name); renameTabId = null })
     }
     if (showOrderDialog) DashboardTabOrderDialog(customDashboards, onMoveTab, onRename = { id ->
@@ -468,7 +471,7 @@ fun CustomDashboardScreen(
         onDismiss = { transferSource = null }, onSelect = { destination ->
             onTransferWidget(source, destination, duplicateWidget); transferSource = null
         }) }
-    deleteTabId?.let { id -> DashboardDeleteDialog(customDashboards.dashboards.firstOrNull { it.id == id }?.name.orEmpty(),
+    deleteTabId?.let { id -> DashboardDeleteDialog(customDashboards.dashboards.firstOrNull { it.id == id }?.localizedName.orEmpty(),
         onDismiss = { deleteTabId = null }, onDelete = { onDeleteTab(id); deleteTabId = null }) }
     if (showBulkSensors) DashboardBulkSensorsDialog(customDashboard, pidsList, onDismiss = { showBulkSensors = false }, onAdd = {
         onAddSensors(it); showBulkSensors = false
@@ -494,33 +497,36 @@ private fun DashboardEditorPanel(name: String, selectedSlot: Int?, selectedTitle
     actions: List<DashboardEditorAction>, columns: Int, onClearSelection: () -> Unit,
     onDone: () -> Unit, modifier: Modifier = Modifier) {
     val scroll = rememberLazyGridState()
+    val toolsDesc = tr("Herramientas del dashboard", "Dashboard tools")
+    val finishDesc = tr("Terminar edición", "Finish editing")
     LaunchedEffect(selectedSlot) { scroll.scrollToItem(0) }
-    Surface(modifier.semantics { contentDescription = "Herramientas del dashboard" }, color = DarkSurface,
+    Surface(modifier.semantics { contentDescription = toolsDesc }, color = DarkSurface,
         shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, BorderDark)) {
         Column(Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Column(Modifier.weight(1f)) {
-                    Text("Modo edición", color = RacingOrange, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                    Text(tr("Modo edición", "Edit mode"), color = RacingOrange, fontSize = 14.sp, fontWeight = FontWeight.Bold,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(if (selectedSlot == null) name else "Indicador ${selectedSlot + 1} · ${selectedTitle ?: "Ranura vacía"}",
+                    val slotLabel = selectedTitle ?: tr("Ranura vacía", "Empty slot")
+                    Text(if (selectedSlot == null) name else tr("Indicador ${selectedSlot + 1} · $slotLabel", "Gauge ${selectedSlot + 1} · $slotLabel"),
                         color = TextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 if (selectedSlot != null) IconButton(onClearSelection, Modifier.size(48.dp)) {
-                    Icon(Icons.Default.Close, "Ver opciones del dash", tint = TextMuted, modifier = Modifier.size(22.dp))
+                    Icon(Icons.Default.Close, tr("Ver opciones del dash", "View dashboard options"), tint = TextMuted, modifier = Modifier.size(22.dp))
                 }
-                Button(onDone, Modifier.heightIn(min = 48.dp).semantics { contentDescription = "Terminar edición" },
+                Button(onDone, Modifier.heightIn(min = 48.dp).semantics { contentDescription = finishDesc },
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = NeonGreen, contentColor = Color.Black)) {
                     Icon(Icons.Default.Check, null, Modifier.size(20.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Listo", fontSize = 13.sp)
+                    Text(tr("Listo", "Done"), fontSize = 13.sp)
                 }
             }
             LazyVerticalGrid(columns = GridCells.Fixed(columns), state = scroll, modifier = Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (selectedSlot == null) item(span = { GridItemSpan(maxLineSpan) }) {
-                    Text("Toca un indicador para editarlo", color = TextMuted, fontSize = 12.sp)
+                    Text(tr("Toca un indicador para editarlo", "Tap a gauge to edit it"), color = TextMuted, fontSize = 12.sp)
                 }
                 items(actions, key = { it.label }) { action ->
                     Row(Modifier.fillMaxWidth().heightIn(min = if (LocalCarMode.current) 76.dp else 56.dp).clip(RoundedCornerShape(8.dp))
@@ -543,10 +549,14 @@ private fun DashboardEditorPanel(name: String, selectedSlot: Int?, selectedTitle
 /** La rejilla completa del coche ocupa el visor, sin reordenación ni paginación. */
 @Composable
 private fun DashboardGridViewport(config: CustomDashboardConfig, editing: Boolean, onEdit: () -> Unit,
-    onChoosePanel: (() -> Unit)?, isFullScreen: Boolean = false, onToggleFullScreen: (() -> Unit)? = null,
+    onChoosePanel: (() -> Unit)?, isFullScreen: Boolean, onToggleFullScreen: (() -> Unit)?,
     modifier: Modifier = Modifier, content: @Composable (List<Int>?, Int?, Boolean) -> Unit) {
     val car = LocalCarMode.current
     val scroll = rememberScrollState()
+    val gaugesDesc = tr("Indicadores del dashboard", "Dashboard gauges")
+    val switchPanelDesc = tr("Cambiar panel", "Switch panel")
+    val fullScreenDesc = if (isFullScreen) tr("Salir de pantalla completa", "Exit full screen") else tr("Pantalla completa", "Full screen")
+    val editDesc = tr("Editar dashboard", "Edit dashboard")
     BoxWithConstraints(modifier) {
         if (car) {
             val scale = LocalDensity.current.fontScale
@@ -554,7 +564,7 @@ private fun DashboardGridViewport(config: CustomDashboardConfig, editing: Boolea
             val controlsSpacing = if (editing || isFullScreen) 0.dp else 6.dp
             val grid = DashboardLayoutPolicy.carGrid(config.gridLayout, maxWidth.value,
                 (maxHeight - if (editing || isFullScreen) 0.dp else controlsHeight + controlsSpacing).value)
-            Column(Modifier.fillMaxSize().semantics { contentDescription = "Indicadores del dashboard" }) {
+            Column(Modifier.fillMaxSize().semantics { contentDescription = gaugesDesc }) {
                 Box(Modifier.weight(1f).fillMaxWidth()) { content(grid.slots, grid.columns, grid.split) }
                 if (!editing && !isFullScreen) Row(
                     Modifier.fillMaxWidth().padding(top = controlsSpacing).height(controlsHeight),
@@ -570,7 +580,7 @@ private fun DashboardGridViewport(config: CustomDashboardConfig, editing: Boolea
                             enabled = onChoosePanel != null,
                             modifier = Modifier
                                 .height(controlsHeight)
-                                .then(if (onChoosePanel != null) Modifier.semantics { contentDescription = "Cambiar panel" } else Modifier),
+                                .then(if (onChoosePanel != null) Modifier.semantics { contentDescription = switchPanelDesc } else Modifier),
                             color = CockpitSurface,
                             shape = RoundedCornerShape(12.dp),
                             border = BorderStroke(1.dp, if (onChoosePanel != null) CockpitElevated else BorderDark.copy(alpha = 0.5f))
@@ -587,7 +597,7 @@ private fun DashboardGridViewport(config: CustomDashboardConfig, editing: Boolea
                                     modifier = Modifier.size(16.dp)
                                 )
                                 androidx.compose.material3.Text(
-                                    text = config.name,
+                                    text = config.localizedName,
                                     color = TextWhite,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold,
@@ -611,7 +621,7 @@ private fun DashboardGridViewport(config: CustomDashboardConfig, editing: Boolea
                                 modifier = Modifier
                                     .size(controlsHeight)
                                     .semantics {
-                                        contentDescription = if (isFullScreen) "Salir de pantalla completa" else "Pantalla completa"
+                                        contentDescription = fullScreenDesc
                                     },
                                 color = if (isFullScreen) CockpitElevated else CockpitSurface,
                                 shape = RoundedCornerShape(12.dp),
@@ -632,7 +642,7 @@ private fun DashboardGridViewport(config: CustomDashboardConfig, editing: Boolea
                         onClick = onEdit,
                         modifier = Modifier
                             .size(controlsHeight)
-                            .semantics { contentDescription = "Editar dashboard" },
+                            .semantics { contentDescription = editDesc },
                         color = CockpitSurface,
                         shape = RoundedCornerShape(12.dp),
                         border = BorderStroke(1.dp, CockpitAccent.copy(alpha = 0.35f))
@@ -652,7 +662,7 @@ private fun DashboardGridViewport(config: CustomDashboardConfig, editing: Boolea
             val viewportHeight = maxHeight
             val minimumHeight = DashboardLayoutPolicy.measure(config.gridLayout, maxWidth.value, LocalDensity.current.fontScale, config.density).minimumHeight.dp
             val needsScroll = minimumHeight > maxHeight
-            Box(Modifier.fillMaxSize().semantics { contentDescription = "Indicadores del dashboard" }
+            Box(Modifier.fillMaxSize().semantics { contentDescription = gaugesDesc }
                 .verticalScroll(scroll, enabled = needsScroll)) {
                 Box(Modifier.fillMaxWidth().height(maxOf(viewportHeight, minimumHeight))) { content(null, null, false) }
             }
@@ -685,11 +695,11 @@ private fun DashboardTabNameDialog(title: String, initialName: String, chooseLay
                 if (!hideHeading) Text(title, color = TextWhite, fontSize = if (short) 14.sp else 18.sp, fontWeight = FontWeight.Bold)
                 Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(name, onValueChange = { name = it.take(40) }, label = { Text("Nombre") },
+                    OutlinedTextField(name, onValueChange = { name = it.take(40) }, label = { Text(tr("Nombre", "Name")) },
                         singleLine = true, modifier = Modifier.fillMaxWidth().bringIntoViewRequester(nameRequester)
                             .onFocusChanged { nameFocused = it.isFocused })
                     if (chooseLayout) {
-                        Text("Disposición de rejilla", color = RacingOrange, fontSize = 12.sp)
+                        Text(tr("Disposición de rejilla", "Grid layout"), color = RacingOrange, fontSize = 12.sp)
                         (if (LocalCarMode.current) DashboardGridLayout.carLayouts else DashboardGridLayout.entries).forEach { option ->
                             Row(Modifier.fillMaxWidth().heightIn(min = if (LocalCarMode.current) 76.dp else 56.dp).clip(RoundedCornerShape(8.dp))
                                 .background(if (layout == option) RacingOrange.copy(alpha = 0.14f) else DarkSurface)
@@ -706,12 +716,12 @@ private fun DashboardTabNameDialog(title: String, initialName: String, chooseLay
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onDismiss, modifier = Modifier.heightIn(min = if (short) 48.dp else 56.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)) { Text("Cancelar", fontSize = 12.sp) }
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)) { Text(tr("Cancelar", "Cancel"), fontSize = 12.sp) }
                     Button(onClick = { onSave(name.trim(), layout) }, enabled = name.isNotBlank(),
                         modifier = Modifier.heightIn(min = if (short) 48.dp else 56.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = RacingOrange)) {
-                        Text(if (chooseLayout) "Crear" else "Guardar", color = Color.Black, fontSize = 12.sp)
+                        Text(if (chooseLayout) tr("Crear", "Create") else tr("Guardar", "Save"), color = Color.Black, fontSize = 12.sp)
                     }
                 }
             }
@@ -726,28 +736,28 @@ private fun DashboardTabOrderDialog(tabs: CustomDashboardTabs, onMove: (String, 
         Surface(Modifier.fillMaxWidth().heightIn(max = minOf(maxHeight, 480.dp)), color = CardBackground,
             shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, BorderDark)) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Ordenar pestañas", color = TextWhite, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text("Usa las flechas para cambiar el orden.", color = TextMuted, fontSize = 12.sp)
+                Text(tr("Ordenar pestañas", "Reorder tabs"), color = TextWhite, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(tr("Usa las flechas para cambiar el orden.", "Use the arrows to change the order."), color = TextMuted, fontSize = 12.sp)
                 LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     items(tabs.dashboards, key = { it.id }) { dashboard ->
                         val index = tabs.dashboards.indexOf(dashboard)
                         Row(Modifier.fillMaxWidth().racingPanel(8.dp).padding(start = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text("${index + 1}", color = RacingOrange, fontSize = 12.sp)
-                            Text(dashboard.name, Modifier.weight(1f).padding(horizontal = 8.dp), color = TextWhite,
+                            Text(dashboard.localizedName, Modifier.weight(1f).padding(horizontal = 8.dp), color = TextWhite,
                                 fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             IconButton(onClick = { onRename(dashboard.id) }) {
-                                Icon(Icons.Default.Edit, "Renombrar ${dashboard.name}", tint = TextMuted, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.Edit, tr("Renombrar ${dashboard.localizedName}", "Rename ${dashboard.localizedName}"), tint = TextMuted, modifier = Modifier.size(18.dp))
                             }
                             IconButton(onClick = { onMove(dashboard.id, index - 1) }, enabled = index > 0) {
-                                Icon(Icons.Default.ArrowUpward, "Mover ${dashboard.name} antes", modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.ArrowUpward, tr("Mover ${dashboard.localizedName} antes", "Move ${dashboard.localizedName} up"), modifier = Modifier.size(18.dp))
                             }
                             IconButton(onClick = { onMove(dashboard.id, index + 1) }, enabled = index < tabs.dashboards.lastIndex) {
-                                Icon(Icons.Default.ArrowDownward, "Mover ${dashboard.name} después", modifier = Modifier.size(18.dp))
+                                Icon(Icons.Default.ArrowDownward, tr("Mover ${dashboard.localizedName} después", "Move ${dashboard.localizedName} down"), modifier = Modifier.size(18.dp))
                             }
                         }
                     }
                 }
-                TextButton(onDismiss, Modifier.align(Alignment.End)) { Text("Listo") }
+                TextButton(onDismiss, Modifier.align(Alignment.End)) { Text(tr("Listo", "Done")) }
             }
         }
     }
@@ -758,12 +768,13 @@ private fun DashboardTabOrderDialog(tabs: CustomDashboardTabs, onMove: (String, 
 private fun CustomDashboardGridContainer(config: CustomDashboardConfig, availablePids: List<ObdPid>,
     vehicleState: VehicleState, connectionState: ConnectionState, isEditMode: Boolean,
     selectedSlot: Int?, onTapSlot: (Int) -> Unit,
-    visibleSlots: List<Int>? = null, carColumns: Int? = null, carSplit: Boolean = false,
-    modifier: Modifier = Modifier) {
+    modifier: Modifier = Modifier,
+    visibleSlots: List<Int>? = null, carColumns: Int? = null, carSplit: Boolean = false) {
     @Composable
     fun Slot(index: Int, slotModifier: Modifier) {
         val widget = config.getWidgetForSlot(index)
-        Box(slotModifier.semantics { contentDescription = "Ranura ${index + 1}" }) {
+        val slotDesc = tr("Ranura ${index + 1}", "Slot ${index + 1}")
+        Box(slotModifier.semantics { contentDescription = slotDesc }) {
             if (widget == null) EmptySlotCard(index, { onTapSlot(index) }, isEditMode = isEditMode,
                 isSelected = selectedSlot == index)
             else DashboardSlotWidget(widget, index, widget.resolvePid(availablePids), vehicleState, connectionState,
@@ -810,8 +821,8 @@ private fun EmptySlotCard(slotIndex: Int, onClick: () -> Unit, modifier: Modifie
             Column(Modifier.fillMaxSize().padding(if (spacious) 12.dp else 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 if (isEditMode && spacious) Icon(Icons.Default.Add, null, tint = CockpitAccent, modifier = Modifier.size(28.dp))
-                androidx.compose.material3.Text("Ranura ${slotIndex + 1}", color = TextWhite, fontSize = titleSize, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                androidx.compose.material3.Text(if (isEditMode) "Añadir" else "Libre", color = CockpitMuted, fontSize = subSize, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                androidx.compose.material3.Text(tr("Ranura ${slotIndex + 1}", "Slot ${slotIndex + 1}"), color = TextWhite, fontSize = titleSize, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                androidx.compose.material3.Text(if (isEditMode) tr("Añadir", "Add") else tr("Libre", "Free"), color = CockpitMuted, fontSize = subSize, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         return
@@ -823,14 +834,14 @@ private fun EmptySlotCard(slotIndex: Int, onClick: () -> Unit, modifier: Modifie
         val compact = maxHeight < 84.dp * LocalDensity.current.fontScale
         if (compact) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             if (isEditMode) Icon(Icons.Default.Add, contentDescription = null, tint = RacingOrange, modifier = Modifier.size(22.dp))
-            Text("Ranura ${slotIndex + 1}", color = TextWhite, fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold,
+            Text(tr("Ranura ${slotIndex + 1}", "Slot ${slotIndex + 1}"), color = TextWhite, fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         } else Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (isEditMode) Box(Modifier.size(32.dp).background(RacingOrange.copy(alpha = 0.14f), CircleShape), contentAlignment = Alignment.Center) {
                 Icon(Icons.Default.Add, contentDescription = null, tint = RacingOrange, modifier = Modifier.size(22.dp))
             }
-            Text("Ranura ${slotIndex + 1}", color = TextWhite, fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-            Text(if (isEditMode) "Toca para asignar" else "Ranura libre", color = TextMuted, fontSize = 9.sp, lineHeight = 12.sp, maxLines = 1)
+            Text(tr("Ranura ${slotIndex + 1}", "Slot ${slotIndex + 1}"), color = TextWhite, fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(if (isEditMode) tr("Toca para asignar", "Tap to assign") else tr("Ranura libre", "Empty slot"), color = TextMuted, fontSize = 9.sp, lineHeight = 12.sp, maxLines = 1)
         }
     }
 }
@@ -840,10 +851,12 @@ private fun EmptySlotCard(slotIndex: Int, onClick: () -> Unit, modifier: Modifie
 private fun DashboardSlotWidget(widget: DashboardWidget, slotIndex: Int, definition: ObdPid?,
     vehicleState: VehicleState, connectionState: ConnectionState, isEditMode: Boolean, isSelected: Boolean,
     onSelect: () -> Unit, density: DashboardDensity) {
+    val editGaugeDesc = tr("Editar indicador ${slotIndex + 1}", "Edit gauge ${slotIndex + 1}")
+    val selectGaugeLabel = tr("Seleccionar indicador", "Select gauge")
     Box(Modifier.fillMaxSize().then(if (isEditMode) Modifier
         .border(if (isSelected) 2.dp else 1.dp, (if (LocalCarMode.current) CockpitAccent else RacingOrange).copy(alpha = if (isSelected) 1f else 0.4f), RoundedCornerShape(if (LocalCarMode.current) 28.dp else 12.dp))
-        .semantics { contentDescription = "Editar indicador ${slotIndex + 1}"; selected = isSelected }
-        .clickable(role = Role.Button, onClickLabel = "Seleccionar indicador", onClick = onSelect) else Modifier)) {
+        .semantics { contentDescription = editGaugeDesc; selected = isSelected }
+        .clickable(role = Role.Button, onClickLabel = selectGaugeLabel, onClick = onSelect) else Modifier)) {
         val status = definition?.telemetryStatus(vehicleState, connectionState) ?: SensorTelemetryStatus.MISSING
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -900,20 +913,20 @@ private fun SelectGridLayoutDialog(
                         Spacer(modifier = Modifier.width(8.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
-                                "Distribución",
+                                tr("Distribución", "Layout"),
                                 color = TextWhite,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                "Elige cómo organizar tus indicadores",
+                                tr("Elige cómo organizar tus indicadores", "Choose how to arrange your gauges"),
                                 color = TextMuted,
                                 fontSize = 11.sp
                             )
                         }
                     }
                     IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = TextMuted)
+                        Icon(Icons.Default.Close, contentDescription = tr("Cerrar", "Close"), tint = TextMuted)
                     }
                 }
 
@@ -990,7 +1003,7 @@ private fun SelectGridLayoutDialog(
                             if (isSelected) {
                                 Icon(
                                     Icons.Default.Check,
-                                    contentDescription = "Seleccionado",
+                                    contentDescription = tr("Seleccionado", "Selected"),
                                     tint = RacingOrange,
                                     modifier = Modifier.size(20.dp)
                                 )
@@ -1036,8 +1049,9 @@ private fun CustomWidgetItem(
 ) {
     val reading = definition?.currentReading(vehicleState, connectionState)
     val value = reading?.value ?: Float.NaN
-    val unit = reading?.units ?: definition?.units.orEmpty()
+    val unit = trUnit(reading?.units ?: definition?.units.orEmpty())
     val displayValue = widget.displayValue(reading)
+    val title = widget.localizedTitle
 
     if (LocalCarMode.current) {
         CarInstrument(widget, definition, reading, vehicleState, connectionState)
@@ -1056,7 +1070,7 @@ private fun CustomWidgetItem(
         if (compact || maxHeight < 90.dp * LocalDensity.current.fontScale || maxWidth < 115.dp * LocalDensity.current.fontScale) {
             Column(Modifier.fillMaxSize().padding(horizontal = 4.dp), verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(widget.title, color = TextMuted, fontSize = 10.sp, lineHeight = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                Text(title, color = TextMuted, fontSize = 10.sp, lineHeight = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(3.dp))
                 FittedValue(if (compact) displayValue else "$displayValue $unit", 22.sp,
@@ -1084,7 +1098,7 @@ private fun CustomWidgetItem(
                         minValue = minVal,
                         formattedValue = displayValue,
                         maxValue = maxVal,
-                        title = widget.title,
+                        title = title,
                         unit = unit,
                         redlineStart = redline,
                         majorTickStep = step,
@@ -1100,7 +1114,7 @@ private fun CustomWidgetItem(
                         modifier = Modifier.padding(4.dp)
                     ) {
                         Text(
-                            text = widget.title,
+                            text = title,
                             color = TextMuted,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -1142,7 +1156,7 @@ private fun CustomWidgetItem(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(text = widget.title, color = TextMuted, fontSize = 11.sp, maxLines = 1,
+                            Text(text = title, color = TextMuted, fontSize = 11.sp, maxLines = 1,
                                 modifier = Modifier.weight(1f), overflow = TextOverflow.Ellipsis)
                             FittedValue(
                                 text = "${displayValue} $unit",
@@ -1170,7 +1184,7 @@ private fun CustomWidgetItem(
                 WidgetType.SPARKLINE_CHART -> {
                     val points = vehicleState.sparklineHistory[definition?.id] ?: emptyList()
                     RealtimeChart(
-                        title = widget.title,
+                        title = title,
                         points = points,
                         currentValue = displayValue,
                         unit = unit,
@@ -1188,7 +1202,7 @@ private fun CustomWidgetItem(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        Text(text = widget.title, color = TextMuted, fontSize = 11.sp, maxLines = 1)
+                        Text(text = title, color = TextMuted, fontSize = 11.sp, maxLines = 1)
                         Spacer(modifier = Modifier.height(4.dp))
                         FittedValue(
                             text = "${displayValue} $unit",
@@ -1227,9 +1241,9 @@ private fun AddWidgetDialog(
             ?: initialWidget.resolvePid(availablePids)?.id.orEmpty()
         else availablePids.firstOrNull { it.isSupported && it.supportChecked }?.id ?: availablePids.firstOrNull()?.id.orEmpty())
     }
-    var customTitle by remember { mutableStateOf(initialWidget?.title.orEmpty()) }
+    var customTitle by remember { mutableStateOf(initialWidget?.localizedTitle.orEmpty()) }
     var lastAutoTitle by remember {
-        mutableStateOf(availablePids.firstOrNull()?.name ?: "Revoluciones del motor")
+        mutableStateOf(availablePids.firstOrNull()?.name ?: tr("Revoluciones del motor", "Engine RPM"))
     }
     var selectedColor by remember { mutableStateOf(initialWidget?.colorHex ?: "#FF6D00") }
     var decimals by remember { mutableStateOf(initialWidget?.decimals) }
@@ -1240,9 +1254,20 @@ private fun AddWidgetDialog(
     val maximum = scaleMax.replace(',', '.').toFloatOrNull()
     val validScale = !customScale || (minimum != null && maximum != null && minimum.isFinite() && maximum.isFinite() && minimum < maximum && (maximum - minimum).isFinite())
     var pidSearchQuery by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf("Todos") }
+    var selectedCategory by remember { mutableStateOf("ALL") }
 
-    val categories = listOf("Todos", "Prestaciones", "Motor", "Temperaturas", "Turbo / Presión", "Diésel / DPF", "Consumo / Batería", "Oxígeno / Mezcla", "Transmisión", "Diagnóstico")
+    val categories = listOf(
+        "ALL" to tr("Todos", "All"),
+        "PERFORMANCE" to tr("Prestaciones", "Performance"),
+        "ENGINE" to tr("Motor", "Engine"),
+        "TEMP" to tr("Temperaturas", "Temperatures"),
+        "TURBO" to tr("Turbo / Presión", "Turbo / Pressure"),
+        "DPF" to tr("Diésel / DPF", "Diesel / DPF"),
+        "FUEL_ELEC" to tr("Consumo / Batería", "Fuel / Battery"),
+        "OXYGEN" to tr("Oxígeno / Mezcla", "Oxygen / Mixture"),
+        "TRANSMISSION" to tr("Transmisión", "Transmission"),
+        "DIAGNOSTICS" to tr("Diagnóstico", "Diagnostics")
+    )
 
     // Filtrar PIDs por búsqueda y categoría
     val filteredPids = remember(availablePids, pidSearchQuery, selectedCategory) {
@@ -1254,15 +1279,33 @@ private fun AddWidgetDialog(
                 pid.modeAndPid.contains(pidSearchQuery, ignoreCase = true)
 
             val matchesCategory = when (selectedCategory) {
-                "Oxígeno / Mezcla" -> pid.category == PidCategory.OXYGEN
-                "Transmisión" -> pid.category == PidCategory.TRANSMISSION
-                "Diagnóstico" -> pid.category == PidCategory.DIAGNOSTICS
-                "Prestaciones" -> pid.shortName in listOf("Potencia", "Par", "Velocidad", "RPM")
-                "Motor" -> pid.category == PidCategory.ENGINE || pid.shortName in listOf("RPM", "Carga", "Acelerador", "MAF")
-                "Temperaturas" -> pid.units.contains("°C") || pid.shortName in listOf("Temp Liq", "Temp Adm", "EGT")
-                "Turbo / Presión" -> pid.shortName in listOf("MAP", "DPF diff.pres") || pid.units in listOf("kPa", "bar")
-                "Diésel / DPF" -> pid.category == PidCategory.EXHAUST_DPF || pid.shortName.contains("DPF") || pid.shortName == "EGT"
-                "Consumo / Batería" -> pid.category == PidCategory.FUEL || pid.category == PidCategory.ELECTRICAL || pid.shortName in listOf("Consumo", "Nivel Dep", "Voltaje")
+                "OXYGEN" -> pid.category == PidCategory.OXYGEN
+                "TRANSMISSION" -> pid.category == PidCategory.TRANSMISSION
+                "DIAGNOSTICS" -> pid.category == PidCategory.DIAGNOSTICS
+                "PERFORMANCE" -> pid.id in listOf("calc_power_hp", "calc_torque_nm", "010D", "010C", "0162", "0161", "0163", "0104", "0143") ||
+                    pid.shortName in listOf("Potencia", "Power", "Par", "Torque", "Velocidad", "Speed", "RPM", "Par actual ECU", "Actual ECU torque", "Par pedido ECU", "Driver torque", "Par referencia", "Ref torque", "Carga", "Load", "Carga absoluta", "Absolute load")
+                "ENGINE" -> pid.category == PidCategory.ENGINE ||
+                    pid.id in listOf("010C", "0104", "0111", "0110") ||
+                    pid.shortName in listOf("RPM", "Carga", "Load", "Acelerador", "Throttle", "MAF")
+                "TEMP" -> pid.units.contains("°C") ||
+                    pid.id in listOf("0105", "010F", "013C") ||
+                    pid.shortName in listOf("Temp Liq", "Coolant", "Temp Adm", "Intake T", "EGT")
+                "TURBO" -> pid.id in listOf("010B", "calc_boost_bar", "h_dpf_diff_pres") ||
+                    pid.shortName in listOf("MAP", "DPF diff.pres") ||
+                    pid.units in listOf("kPa", "bar", "hPa", "mbar", "Pa") ||
+                    pid.shortName.contains("Turbo", ignoreCase = true) ||
+                    pid.shortName.contains("VGT", ignoreCase = true) ||
+                    pid.shortName.contains("Wastegate", ignoreCase = true) ||
+                    pid.shortName.contains("Boost", ignoreCase = true)
+                "DPF" -> pid.category == PidCategory.EXHAUST_DPF ||
+                    pid.shortName.contains("DPF", ignoreCase = true) ||
+                    pid.shortName.contains("FAP", ignoreCase = true) ||
+                    pid.shortName.contains("EGT", ignoreCase = true) ||
+                    pid.shortName.contains("AdBlue", ignoreCase = true)
+                "FUEL_ELEC" -> pid.category == PidCategory.FUEL ||
+                    pid.category == PidCategory.ELECTRICAL ||
+                    pid.id in listOf("calc_fuel_rate_lh", "012F", "0142") ||
+                    pid.shortName in listOf("Consumo", "Fuel Rate", "Nivel Dep", "Fuel Lvl", "Voltaje", "Voltage")
                 else -> true
             }
             matchesQuery && matchesCategory
@@ -1270,20 +1313,20 @@ private fun AddWidgetDialog(
     }
 
     val typeOptions = listOf(
-        WidgetType.ANALOG_GAUGE to "Analógico",
-        WidgetType.DIGITAL_HUD to "Digital",
-        WidgetType.HORIZONTAL_BAR to "Barra",
-        WidgetType.SPARKLINE_CHART to "Gráfico",
-        WidgetType.COMPACT_TILE to "Compacto"
+        WidgetType.ANALOG_GAUGE to tr("Analógico", "Analog"),
+        WidgetType.DIGITAL_HUD to tr("Digital", "Digital"),
+        WidgetType.HORIZONTAL_BAR to tr("Barra", "Bar"),
+        WidgetType.SPARKLINE_CHART to tr("Gráfico", "Chart"),
+        WidgetType.COMPACT_TILE to tr("Compacto", "Compact")
     )
 
     val colorOptions = listOf(
-        "#FF6D00" to "Naranja",
-        "#00E5FF" to "Cian",
-        "#00E676" to "Verde",
-        "#FF1744" to "Rojo",
-        "#FFD600" to "Amarillo",
-        "#D500F9" to "Púrpura"
+        "#FF6D00" to tr("Naranja", "Orange"),
+        "#00E5FF" to tr("Cian", "Cyan"),
+        "#00E676" to tr("Verde", "Green"),
+        "#FF1744" to tr("Rojo", "Red"),
+        "#FFD600" to tr("Amarillo", "Yellow"),
+        "#D500F9" to tr("Púrpura", "Purple")
     )
 
     fun onSelectSensor(pid: ObdPid) {
@@ -1317,7 +1360,7 @@ private fun AddWidgetDialog(
     @Composable
     fun SensorList(listModifier: Modifier) {
         LazyColumn(listModifier.racingPanel(10.dp).padding(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (filteredPids.isEmpty()) item { Text("No hay sensores que coincidan.", color = TextMuted, fontSize = 12.sp) }
+            if (filteredPids.isEmpty()) item { Text(tr("No hay sensores que coincidan.", "No matching sensors found."), color = TextMuted, fontSize = 12.sp) }
             items(filteredPids, key = { it.id }) { pid ->
                 val selected = selectedPid == pid.id
                 Column(Modifier.fillMaxWidth().heightIn(min = if (carPicker) 76.dp else 56.dp).clip(RoundedCornerShape(8.dp))
@@ -1327,12 +1370,12 @@ private fun AddWidgetDialog(
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text(pid.shortName, Modifier.weight(1f), color = if (selected) RacingOrange else TextWhite,
                             fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        FittedValue(pid.units, 10.sp, Modifier.weight(0.65f), color = TextMuted, textAlign = TextAlign.End)
-                        if (selected) Icon(Icons.Default.Check, contentDescription = "Seleccionado", tint = RacingOrange,
+                        FittedValue(trUnit(pid.units), 10.sp, Modifier.weight(0.65f), color = TextMuted, textAlign = TextAlign.End)
+                        if (selected) Icon(Icons.Default.Check, contentDescription = tr("Seleccionado", "Selected"), tint = RacingOrange,
                             modifier = Modifier.padding(start = 6.dp).size(16.dp))
                     }
                     Text(pid.name, color = TextMuted, fontSize = 10.sp, maxLines = if (carPicker) 1 else 2, overflow = TextOverflow.Ellipsis)
-                    if (!carPicker) Text("${pid.modeAndPid}${if (pid.header.isNotBlank()) " · ECU ${pid.header}" else ""} · ${pid.supportDescription}" + if (!pid.isEnabled) " · Desactivado" else "",
+                    if (!carPicker) Text("${pid.modeAndPid}${if (pid.header.isNotBlank()) " · ECU ${pid.header}" else ""} · ${pid.supportDescription}" + if (!pid.isEnabled) tr(" · Desactivado", " · Disabled") else "",
                         color = TextMuted, fontSize = 10.sp)
                 }
             }
@@ -1344,7 +1387,7 @@ private fun AddWidgetDialog(
         if (carPicker) {
             Column(selectorModifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(pidSearchQuery, { pidSearchQuery = it }, singleLine = true,
-                    placeholder = { Text("Buscar sensor…") },
+                    placeholder = { Text(tr("Buscar sensor…", "Search sensor…")) },
                     modifier = Modifier.fillMaxWidth().bringIntoViewRequester(searchRequester)
                         .onFocusChanged { searchFocused = it.isFocused })
                 if (!keyboardVisible) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -1360,11 +1403,11 @@ private fun AddWidgetDialog(
                     }
                     Box(Modifier.weight(1f)) {
                         OutlinedButton(onClick = { showCategoryMenu = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text(selectedCategory, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(categories.firstOrNull { it.first == selectedCategory }?.second ?: categories.first().second, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         DropdownMenu(showCategoryMenu, { showCategoryMenu = false }) {
-                            categories.forEach { category -> DropdownMenuItem(text = { Text(category) }, onClick = {
-                                selectedCategory = category; showCategoryMenu = false
+                            categories.forEach { (catKey, catLabel) -> DropdownMenuItem(text = { Text(catLabel) }, onClick = {
+                                selectedCategory = catKey; showCategoryMenu = false
                             }) }
                         }
                     }
@@ -1374,7 +1417,7 @@ private fun AddWidgetDialog(
             return
         }
         Column(selectorModifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Tipo de indicador", color = RacingOrange, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            Text(tr("Tipo de indicador", "Gauge type"), color = RacingOrange, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(typeOptions) { (type, label) ->
                     val selected = selectedType == type
@@ -1387,16 +1430,16 @@ private fun AddWidgetDialog(
                 }
             }
             OutlinedTextField(value = pidSearchQuery, onValueChange = { pidSearchQuery = it },
-                placeholder = { Text("Buscar sensor…", fontSize = 12.sp) }, singleLine = true,
+                placeholder = { Text(tr("Buscar sensor…", "Search sensor…"), fontSize = 12.sp) }, singleLine = true,
                 textStyle = androidx.compose.ui.text.TextStyle(color = TextWhite, fontSize = if (LocalCarMode.current) 24.sp else 14.sp),
                 modifier = Modifier.fillMaxWidth().bringIntoViewRequester(searchRequester)
                     .onFocusChanged { searchFocused = it.isFocused })
             LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(categories) { category ->
+                items(categories, key = { it.first }) { (catKey, catLabel) ->
                     Box(Modifier.heightIn(min = if (LocalCarMode.current) 76.dp else 48.dp).clip(RoundedCornerShape(8.dp))
-                        .background(if (selectedCategory == category) RacingOrange.copy(alpha = 0.16f) else DarkSurface)
-                        .clickable { selectedCategory = category }.padding(horizontal = 12.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
-                        Text(category, fontSize = 13.sp, color = if (selectedCategory == category) RacingOrange else TextMuted)
+                        .background(if (selectedCategory == catKey) RacingOrange.copy(alpha = 0.16f) else DarkSurface)
+                        .clickable { selectedCategory = catKey }.padding(horizontal = 12.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
+                        Text(catLabel, fontSize = 13.sp, color = if (selectedCategory == catKey) RacingOrange else TextMuted)
                     }
                 }
             }
@@ -1408,19 +1451,19 @@ private fun AddWidgetDialog(
     fun IndicatorOptions() {
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (initialWidget != null && availablePids.none { it.id == selectedPid }) {
-                Text("Sensor no encontrado. Puedes conservar su vínculo o seleccionar otro en «Sensor».", color = WarningAmber, fontSize = 12.sp)
+                Text(tr("Sensor no encontrado. Puedes conservar su vínculo o seleccionar otro en «Sensor».", "Sensor not found. You can keep its link or select another under 'Sensor'."), color = WarningAmber, fontSize = 12.sp)
             }
-            Text("Vista previa · Ejemplo", color = RacingOrange, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            Text(tr("Vista previa · Ejemplo", "Preview · Example"), color = RacingOrange, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             Box(Modifier.fillMaxWidth().height(96.dp * fontScale).racingPanel().padding(6.dp)) {
                 LivePreviewWidget(selectedType, availablePids.find { it.id == selectedPid }?.shortName.orEmpty(),
                     customTitle.ifBlank { availablePids.find { it.id == selectedPid }?.name.orEmpty() }, selectedColor,
-                    availablePids.find { it.id == selectedPid }?.units ?: "",
+                    trUnit(availablePids.find { it.id == selectedPid }?.units ?: ""),
                     minimum = if (customScale && validScale) minimum!! else availablePids.find { it.id == selectedPid }?.minValue ?: 0f,
                     maximum = if (customScale && validScale) maximum!! else availablePids.find { it.id == selectedPid }?.maxValue ?: 100f,
                     decimals = decimals)
             }
             OutlinedTextField(value = customTitle, onValueChange = { customTitle = it.take(120) },
-                label = { Text("Título del indicador", fontSize = 12.sp) }, singleLine = true,
+                label = { Text(tr("Título del indicador", "Gauge title"), fontSize = 12.sp) }, singleLine = true,
                 textStyle = androidx.compose.ui.text.TextStyle(color = TextWhite, fontSize = if (LocalCarMode.current) 24.sp else 14.sp),
                 placeholder = { Text(availablePids.find { it.id == selectedPid }?.name.orEmpty(), fontSize = 12.sp) },
                 modifier = Modifier.fillMaxWidth().bringIntoViewRequester(titleRequester)
@@ -1430,25 +1473,26 @@ private fun AddWidgetDialog(
                         val name = availablePids.find { it.id == selectedPid }?.name ?: selectedPid
                         customTitle = name
                         lastAutoTitle = name
-                    }) { Icon(Icons.Default.Refresh, contentDescription = "Restablecer título", tint = TextMuted) }
+                    }) { Icon(Icons.Default.Refresh, contentDescription = tr("Restablecer título", "Reset title"), tint = TextMuted) }
                 })
-            Text("Color", color = TextMuted, fontSize = 11.sp)
+            Text(tr("Color", "Color"), color = TextMuted, fontSize = 11.sp)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 colorOptions.forEach { (hex, name) ->
                     val color = when (hex) {
                         "#00E5FF" -> NeonCyan; "#00E676" -> NeonGreen; "#FF1744" -> Color(0xFFFF1744)
                         "#FFD600" -> Color(0xFFFFD600); "#D500F9" -> Color(0xFFD500F9); else -> RacingOrange
                     }
+                    val colorDesc = tr("Color $name", "Color $name")
                     Box(Modifier.size(if (LocalCarMode.current) 76.dp else 56.dp).clip(CircleShape).background(color)
                         .border(if (selectedColor == hex) 3.dp else 1.dp, if (selectedColor == hex) TextWhite else BorderDark, CircleShape)
-                        .semantics { contentDescription = "Color $name" }
+                        .semantics { contentDescription = colorDesc }
                         .clickable { selectedColor = hex }, contentAlignment = Alignment.Center) {
                         if (selectedColor == hex) Icon(Icons.Default.Check, contentDescription = null, tint = Color.Black,
                             modifier = Modifier.size(24.dp))
                     }
                 }
             }
-            Text("Decimales", color = TextMuted, fontSize = 12.sp)
+            Text(tr("Decimales", "Decimals"), color = TextMuted, fontSize = 12.sp)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 (listOf<Int?>(null) + (0..4).toList()).forEach { value ->
                     FilterChip(selected = decimals == value, onClick = { decimals = value },
@@ -1457,7 +1501,7 @@ private fun AddWidgetDialog(
                 }
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Escala personalizada", Modifier.weight(1f), color = TextWhite)
+                Text(tr("Escala personalizada", "Custom scale"), Modifier.weight(1f), color = TextWhite)
                 androidx.compose.material3.Switch(customScale, onCheckedChange = { enabled ->
                     customScale = enabled
                     if (enabled && scaleMin.isBlank()) scaleMin = (availablePids.find { it.id == selectedPid }?.minValue ?: 0f).toString()
@@ -1466,12 +1510,19 @@ private fun AddWidgetDialog(
             }
             if (customScale) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(scaleMin, { scaleMin = it.take(20) }, Modifier.weight(1f), label = { Text("Mínimo") }, singleLine = true, isError = !validScale)
-                    OutlinedTextField(scaleMax, { scaleMax = it.take(20) }, Modifier.weight(1f), label = { Text("Máximo") }, singleLine = true, isError = !validScale)
+                    OutlinedTextField(scaleMin, { scaleMin = it.take(20) }, Modifier.weight(1f), label = { Text(tr("Mínimo", "Minimum")) }, singleLine = true, isError = !validScale)
+                    OutlinedTextField(scaleMax, { scaleMax = it.take(20) }, Modifier.weight(1f), label = { Text(tr("Máximo", "Maximum")) }, singleLine = true, isError = !validScale)
                 }
-                if (!validScale) Text("Introduce números finitos: mínimo menor que máximo.", color = com.torqueobd2.dash.ui.theme.DangerRed, fontSize = 12.sp)
+                if (!validScale) Text(tr("Introduce números finitos: mínimo menor que máximo.", "Enter finite numbers: minimum less than maximum."), color = com.torqueobd2.dash.ui.theme.DangerRed, fontSize = 12.sp)
             }
-            Text("La escala cambia diales y barras; los decimales cambian la presentación. Se conserva el valor recibido de la ECU.", color = TextMuted, fontSize = 11.sp)
+            Text(
+                tr(
+                    "La escala cambia diales y barras; los decimales cambian la presentación. Se conserva el valor recibido de la ECU.",
+                    "Scale changes dials and bars; decimals change formatting. Raw ECU values are preserved."
+                ),
+                color = TextMuted,
+                fontSize = 11.sp
+            )
         }
     }
 
@@ -1485,13 +1536,13 @@ private fun AddWidgetDialog(
                 color = CardBackground, border = BorderStroke(1.dp, BorderDark)) {
                 Column(Modifier.fillMaxSize().padding(if (short) 6.dp else 10.dp)) {
                     if (!hideHeading) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (carPicker) (if (showAppearance) "Apariencia" else "Elegir sensor") else if (initialWidget == null) "Añadir indicador" else "Editar indicador", Modifier.weight(1f), color = TextWhite, fontSize = if (short) 14.sp else 20.sp,
+                        Text(if (carPicker) (if (showAppearance) tr("Apariencia", "Appearance") else tr("Elegir sensor", "Choose sensor")) else if (initialWidget == null) tr("Añadir indicador", "Add gauge") else tr("Editar indicador", "Edit gauge"), Modifier.weight(1f), color = TextWhite, fontSize = if (short) 14.sp else 20.sp,
                             fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (carPicker) IconButton(onClick = { showAppearance = !showAppearance }) {
-                            Icon(Icons.Default.Tune, if (showAppearance) "Elegir sensor" else "Configurar apariencia", tint = RacingOrange)
+                            Icon(Icons.Default.Tune, if (showAppearance) tr("Elegir sensor", "Choose sensor") else tr("Configurar apariencia", "Configure appearance"), tint = RacingOrange)
                         }
                         IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
-                            Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = TextMuted)
+                            Icon(Icons.Default.Close, contentDescription = tr("Cerrar", "Close"), tint = TextMuted)
                         }
                     }
                     Spacer(Modifier.height(if (short) 2.dp else 6.dp))
@@ -1508,10 +1559,10 @@ private fun AddWidgetDialog(
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             FilterChip(selected = !showAppearance, onClick = { showAppearance = false },
                                 modifier = Modifier.heightIn(min = 48.dp),
-                                label = { Text("Sensor") })
+                                label = { Text(tr("Sensor", "Sensor")) })
                             FilterChip(selected = showAppearance, onClick = { showAppearance = true },
                                 modifier = Modifier.heightIn(min = 48.dp),
-                                label = { Text("Apariencia") })
+                                label = { Text(tr("Apariencia", "Appearance")) })
                         }
                         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
                             verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -1523,7 +1574,7 @@ private fun AddWidgetDialog(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = onDismiss, modifier = Modifier.weight(1f).heightIn(min = if (short) 48.dp else 56.dp),
                             contentPadding = PaddingValues(if (short) 4.dp else 8.dp)) {
-                            FittedValue("Cancelar", 13.sp, color = TextMuted, textAlign = TextAlign.Center)
+                            FittedValue(tr("Cancelar", "Cancel"), 13.sp, color = TextMuted, textAlign = TextAlign.Center)
                         }
                         Button(onClick = {
                             val title = customTitle.ifBlank { availablePids.find { it.id == selectedPid }?.name ?: selectedPid }
@@ -1535,7 +1586,7 @@ private fun AddWidgetDialog(
                             modifier = Modifier.weight(1f).heightIn(min = if (short) 48.dp else 56.dp),
                             contentPadding = PaddingValues(if (short) 4.dp else 8.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = RacingOrange)) {
-                            FittedValue(if (initialWidget == null) "Añadir" else "Guardar indicador", 13.sp, color = Color.Black, textAlign = TextAlign.Center)
+                            FittedValue(if (initialWidget == null) tr("Añadir", "Add") else tr("Guardar indicador", "Save gauge"), 13.sp, color = Color.Black, textAlign = TextAlign.Center)
                         }
                     }
                 }
@@ -1556,28 +1607,20 @@ private fun LivePreviewWidget(
 ) {
     val widgetColor = runCatching { Color(android.graphics.Color.parseColor(colorHex)) }.getOrDefault(RacingOrange)
 
-    val displayUnit = if (unit.isNotBlank()) unit else when (pidShortName) {
-        "Potencia" -> "CV"
-        "Par" -> "Nm"
+    val displayUnit = trUnit(if (unit.isNotBlank()) unit else when (pidShortName) {
+        "Potencia", "Power" -> "CV"
+        "Par", "Torque" -> "Nm"
         "RPM" -> "RPM"
-        "Velocidad" -> "km/h"
+        "Velocidad", "Speed" -> "km/h"
         "MAP" -> "kPa"
-        "Temp Liq" -> "°C"
+        "Temp Liq", "Coolant" -> "°C"
         else -> ""
-    }
+    })
 
     val demo = minimum + (maximum - minimum) * 0.65f
     val demoText = demo.telemetryText(decimals ?: 1)
     when (type) {
         WidgetType.ANALOG_GAUGE -> {
-            val maxVal = when (pidShortName) {
-                "RPM" -> 6000f
-                "Velocidad" -> 240f
-                "MAP" -> 255f
-                "Potencia" -> 250f
-                "Par" -> 500f
-                else -> 100f
-            }
             AnalogGauge(
                 value = demo,
                 formattedValue = demoText,
@@ -1690,11 +1733,11 @@ private fun PresetsDialog(
                     Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.DashboardCustomize, contentDescription = null, tint = RacingOrange, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Plantillas", color = TextWhite, fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                        Text(tr("Plantillas", "Templates"), color = TextWhite, fontSize = 20.sp, fontWeight = FontWeight.Bold,
                             modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     IconButton(onClick = onDismiss, modifier = Modifier.size(26.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = TextMuted, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Close, contentDescription = tr("Cerrar", "Close"), tint = TextMuted, modifier = Modifier.size(16.dp))
                     }
                 }
 
@@ -1735,14 +1778,14 @@ private fun PresetsDialog(
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
-                                Text("Restablecer por Defecto", fontSize = 10.sp, color = NeonCyan)
+                                Text(tr("Restablecer por Defecto", "Reset to Default"), fontSize = 10.sp, color = NeonCyan)
                             }
                             OutlinedButton(
                                 onClick = onClearDashboard,
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
-                                Text("Vaciar Dashboard", fontSize = 10.sp, color = Color(0xFFFF5252))
+                                Text(tr("Vaciar Dashboard", "Clear Dashboard"), fontSize = 10.sp, color = Color(0xFFFF5252))
                             }
                         }
                     }

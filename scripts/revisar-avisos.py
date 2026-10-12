@@ -16,7 +16,7 @@ args = parser.parse_args()
 if not args.serial.startswith('emulator-'):
     raise SystemExit('Solo emuladores dedicados a desarrollo.')
 ADB = [str(pathlib.Path.home() / 'Library/Android/sdk/platform-tools/adb'), '-s', args.serial]
-PACKAGE = 'com.torqueobd2.dash'
+PACKAGE = 'com.stradaobd.dash'
 OUT = ROOT / 'build/alerts-review'
 OUT.mkdir(parents=True, exist_ok=True)
 

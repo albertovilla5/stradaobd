@@ -27,9 +27,10 @@ import com.torqueobd2.dash.data.model.telemetryText
 
 @Composable
 fun DigitalHudGauge(
-    speedKmh: Float, rpm: Float, maxRpm: Float = 5500f, modifier: Modifier = Modifier,
+    speedKmh: Float, rpm: Float, maxRpm: Float, modifier: Modifier = Modifier,
     showShiftLights: Boolean = true, coolantTempC: Float = Float.NaN, batteryVoltage: Float = Float.NaN,
-    speedStatus: String = "Pendiente de consultar", rpmStatus: String = "Pendiente de consultar"
+    speedStatus: String = com.torqueobd2.dash.i18n.tr("Pendiente de consultar", "Pending query"),
+    rpmStatus: String = com.torqueobd2.dash.i18n.tr("Pendiente de consultar", "Pending query")
 ) {
     BoxWithConstraints(modifier.racingPanel(12.dp).drawBehind {
         if (showShiftLights) {
@@ -47,7 +48,7 @@ fun DigitalHudGauge(
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
             if (showShiftLights) ShiftLightsBar(rpm / maxRpm.coerceAtLeast(1000f))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("VELOCIDAD", color = if (showShiftLights) RacingOrange else TextMuted, fontSize = 10.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.SemiBold)
+                Text(com.torqueobd2.dash.i18n.tr("VELOCIDAD", "SPEED"), color = if (showShiftLights) RacingOrange else TextMuted, fontSize = 10.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.SemiBold)
                 if (showShiftLights && !tight) Text("km/h", color = TextDim, fontSize = 10.sp)
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {

@@ -20,7 +20,7 @@ args = parser.parse_args()
 if not args.serial.startswith('emulator-'):
     raise SystemExit('Solo emuladores dedicados a desarrollo.')
 ADB = [str(pathlib.Path.home() / 'Library/Android/sdk/platform-tools/adb'), '-s', args.serial]
-PACKAGE = 'com.torqueobd2.dash'
+PACKAGE = 'com.stradaobd.dash'
 OUT = ROOT / 'build/recording-review'
 OUT.mkdir(parents=True, exist_ok=True)
 
@@ -294,7 +294,7 @@ try:
     count = len(samples(first))
     adb('shell', 'input', 'keyevent', 'KEYCODE_SLEEP'); time.sleep(4)
     assert len(samples(first)) > count + 10
-    assert 'TorqueOBD2:telemetry' in active_wakelocks()
+    assert 'StradaOBD:telemetry' in active_wakelocks()
     passed('graba-con-pantalla-apagada')
     fixture['offline'] = True; time.sleep(4)
     count = len(samples(first)); time.sleep(3)
@@ -379,7 +379,7 @@ try:
     time.sleep(2)
     stopped = len(commands); time.sleep(2); assert len(commands) == stopped
     assert 'isForeground=true' not in adb('shell', 'dumpsys', 'activity', 'services', PACKAGE).decode()
-    assert 'TorqueOBD2:telemetry' not in active_wakelocks()
+    assert 'StradaOBD:telemetry' not in active_wakelocks()
     passed('detener-lectura-libera-servicio-y-bloqueos')
     log = adb('shell', 'logcat', '-d', '-s', 'AndroidRuntime:E').decode()
     assert 'FATAL EXCEPTION' not in log, log

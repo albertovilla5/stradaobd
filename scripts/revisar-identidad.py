@@ -18,7 +18,7 @@ args = parser.parse_args()
 if not args.serial.startswith('emulator-'):
     raise SystemExit('Esta prueba solo admite un emulador de desarrollo.')
 ADB = [args.adb, '-s', args.serial]
-PACKAGE = 'com.torqueobd2.dash'
+PACKAGE = 'com.stradaobd.dash'
 OUT = ROOT / 'build/identity-review'
 OUT.mkdir(parents=True, exist_ok=True)
 

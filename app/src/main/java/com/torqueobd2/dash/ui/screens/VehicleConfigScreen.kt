@@ -9,7 +9,13 @@ import com.torqueobd2.dash.ui.automotive.CarTextButton as TextButton
 import com.torqueobd2.dash.ui.automotive.CarIconButton as IconButton
 import com.torqueobd2.dash.ui.automotive.CarTab as Tab
 import com.torqueobd2.dash.ui.automotive.CarFilterChip as FilterChip
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import android.content.res.Configuration
+import android.net.Uri
+import android.widget.Toast
 import com.torqueobd2.dash.ui.components.ResponsiveFormDialog
 import com.torqueobd2.dash.ui.components.RacingHeader
 import com.torqueobd2.dash.ui.components.FittedValue
@@ -47,13 +53,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Speed
@@ -75,6 +84,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
@@ -93,6 +103,8 @@ import com.torqueobd2.dash.data.model.ObdPid
 import com.torqueobd2.dash.data.model.PidCategory
 import com.torqueobd2.dash.data.model.VehicleProfile
 import com.torqueobd2.dash.data.model.VehicleState
+import com.torqueobd2.dash.i18n.tr
+import com.torqueobd2.dash.i18n.trUnit
 import com.torqueobd2.dash.ui.theme.CarbonBlack
 import com.torqueobd2.dash.ui.theme.CardBackground
 import com.torqueobd2.dash.ui.theme.DangerRed
@@ -157,7 +169,7 @@ fun VehicleConfigScreen(
                 .background(CarbonBlack)
         ) {
             if (!compactHeader) {
-                RacingHeader("Tu garaje", "Vehículos, calibración y sensores disponibles.", modifier = Modifier.padding(16.dp), eyebrow = "VEHÍCULO / CONFIGURACIÓN")
+                RacingHeader(tr("Tu garaje", "Your garage"), tr("Vehículos, calibración y sensores disponibles.", "Vehicles, calibration and available sensors."), modifier = Modifier.padding(16.dp), eyebrow = tr("VEHÍCULO / CONFIGURACIÓN", "VEHICLE / CONFIGURATION"))
             }
             // ENCABEZADO CON PESTAÑAS (MIS VEHÍCULOS / SENSORES DISPONIBLES)
             Row(Modifier.fillMaxWidth().background(DarkSurface), verticalAlignment = Alignment.CenterVertically) {
@@ -188,7 +200,7 @@ fun VehicleConfigScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Garaje · ${savedVehicles.size}",
+                                    text = tr("Garaje · ${savedVehicles.size}", "Garage · ${savedVehicles.size}"),
                                     color = if (selectedSubTab == 0) RacingOrange else TextMuted,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp
@@ -209,7 +221,7 @@ fun VehicleConfigScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "Sensores · $supportedCount/${allPids.size}",
+                                    text = tr("Sensores · $supportedCount/${allPids.size}", "Sensors · $supportedCount/${allPids.size}"),
                                     color = if (selectedSubTab == 1) NeonCyan else TextMuted,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp
@@ -225,11 +237,11 @@ fun VehicleConfigScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = RacingOrange),
                         shape = RoundedCornerShape(8.dp)
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = if (iconOnlyAdd) "Añadir Vehículo" else null,
+                        Icon(Icons.Default.Add, contentDescription = if (iconOnlyAdd) tr("Añadir Vehículo", "Add Vehicle") else null,
                             modifier = Modifier.size(18.dp), tint = Color.Black)
                         if (!iconOnlyAdd) {
                             Spacer(Modifier.width(4.dp))
-                            Text("Añadir Vehículo", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Text(tr("Añadir Vehículo", "Add Vehicle"), color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                         }
                     }
                 }
@@ -269,7 +281,7 @@ fun VehicleConfigScreen(
                             onClick = { successNotification = null },
                             modifier = Modifier.size(24.dp)
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = TextMuted, modifier = Modifier.size(14.dp))
+                            Icon(Icons.Default.Close, contentDescription = tr("Cerrar", "Close"), tint = TextMuted, modifier = Modifier.size(14.dp))
                         }
                     }
                 }
@@ -286,7 +298,7 @@ fun VehicleConfigScreen(
                         onEditVehicle = { vehicleToEdit = it },
                         onSetActiveVehicle = {
                             onSetActiveVehicle(it)
-                            successNotification = "Vehículo activo actualizado."
+                            successNotification = tr("Vehículo activo actualizado.", "Active vehicle updated.")
                         },
                         onDeleteVehicle = { vehicleToDelete = it },
                         onOpenPrivacyDialog = { showPrivacyDialog = true }
@@ -334,7 +346,10 @@ fun VehicleConfigScreen(
                 if (makeActive) {
                     onSetActiveVehicle(updatedVehicle.id)
                 }
-                successNotification = "Vehículo '${updatedVehicle.name}' guardado correctamente."
+                successNotification = tr(
+                    "Vehículo '${updatedVehicle.name}' guardado correctamente.",
+                    "Vehicle '${updatedVehicle.name}' saved successfully."
+                )
                 isCreatingVehicle = false
                 vehicleToEdit = null
             }
@@ -352,7 +367,7 @@ fun VehicleConfigScreen(
             },
             title = {
                 Text(
-                    text = "Eliminar Vehículo",
+                    text = tr("Eliminar Vehículo", "Delete Vehicle"),
                     color = TextWhite,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
@@ -361,13 +376,19 @@ fun VehicleConfigScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "¿Deseas eliminar permanentemente '${target.name}' del garaje?",
+                        text = tr(
+                            "¿Deseas eliminar permanentemente '${target.name}' del garaje?",
+                            "Do you want to permanently delete '${target.name}' from the garage?"
+                        ),
                         color = TextWhite,
                         fontSize = 13.sp
                     )
                     if (target.id == activeProfile.id) {
                         Text(
-                            text = "Aviso: Este es el vehículo activo actualmente. Al eliminarlo, se activará automáticamente otro vehículo de tu lista.",
+                            text = tr(
+                                "Aviso: Este es el vehículo activo actualmente. Al eliminarlo, se activará automáticamente otro vehículo de tu lista.",
+                                "Note: This is currently the active vehicle. Deleting it will automatically activate another vehicle from your list."
+                            ),
                             color = WarningAmber,
                             fontSize = 11.sp
                         )
@@ -378,17 +399,17 @@ fun VehicleConfigScreen(
                 Button(
                     onClick = {
                         onDeleteVehicle(target.id)
-                        successNotification = "Vehículo '${target.name}' eliminado."
+                        successNotification = tr("Vehículo '${target.name}' eliminado.", "Vehicle '${target.name}' deleted.")
                         vehicleToDelete = null
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
                 ) {
-                    Text("Eliminar", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(tr("Eliminar", "Delete"), color = Color.White, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { vehicleToDelete = null }) {
-                    Text("Cancelar", color = TextMuted)
+                    Text(tr("Cancelar", "Cancel"), color = TextMuted)
                 }
             }
         )
@@ -431,13 +452,16 @@ private fun VehiclesListSection(
                 ) {
                     Column(modifier = Modifier.widthIn(max = 480.dp)) {
                         Text(
-                            text = "GARAJE DE VEHÍCULOS",
+                            text = tr("GARAJE DE VEHÍCULOS", "VEHICLE GARAGE"),
                             color = RacingOrange,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "El vehículo activo define la conexión y la escala de RPM. Su ficha no genera lecturas.",
+                            text = tr(
+                                "El vehículo activo define la conexión y la escala de RPM. Su ficha no genera lecturas.",
+                                "The active vehicle defines connection and RPM scale. Its profile does not generate readings."
+                            ),
                             color = TextMuted,
                             fontSize = 11.sp,
                             lineHeight = 15.sp
@@ -451,7 +475,7 @@ private fun VehiclesListSection(
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.Black)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Añadir Vehículo", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text(tr("Añadir Vehículo", "Add Vehicle"), color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 }
             }
@@ -474,7 +498,10 @@ private fun VehiclesListSection(
         item {
             if (compactHeader) {
                 Text(
-                    "El vehículo activo define la conexión y la escala de RPM. Su ficha no genera lecturas.",
+                    tr(
+                        "El vehículo activo define la conexión y la escala de RPM. Su ficha no genera lecturas.",
+                        "The active vehicle defines connection and RPM scale. Its profile does not generate readings."
+                    ),
                     color = TextMuted, fontSize = 11.sp, lineHeight = 15.sp
                 )
             }
@@ -494,13 +521,13 @@ private fun VehiclesListSection(
                         Icon(Icons.Default.Security, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Privacidad y telemetría 100% local en tu dispositivo.",
+                            text = tr("Privacidad y telemetría 100% local en tu dispositivo.", "100% local privacy and telemetry on your device."),
                             color = TextMuted,
                             fontSize = 11.sp
                         )
                     }
                     TextButton(onClick = onOpenPrivacyDialog) {
-                        Text("Ver Política", color = NeonCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(tr("Ver Política", "View Policy"), color = NeonCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -551,13 +578,13 @@ private fun VehicleCard(
                     Spacer(modifier = Modifier.width(8.dp))
                     Column {
                         Text(
-                            text = vehicle.name.ifBlank { "Vehículo Sin Nombre" },
+                            text = vehicle.name.ifBlank { tr("Vehículo Sin Nombre", "Unnamed Vehicle") },
                             color = TextWhite,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Año ${vehicle.modelYear} • ${vehicle.fuelType.displayName}",
+                            text = tr("Año ${vehicle.modelYear} • ${vehicle.fuelType.displayName}", "Year ${vehicle.modelYear} • ${vehicle.fuelType.displayName}"),
                             color = if (isActive) NeonCyan.copy(alpha = 0.8f) else TextMuted,
                             fontSize = 11.sp
                         )
@@ -577,7 +604,7 @@ private fun VehicleCard(
                             Icon(Icons.Default.Check, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(12.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "ACTIVO",
+                                text = tr("ACTIVO", "ACTIVE"),
                                 color = NeonCyan,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
@@ -593,7 +620,7 @@ private fun VehicleCard(
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = "INACTIVO",
+                            text = tr("INACTIVO", "INACTIVE"),
                             color = TextMuted,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold
@@ -604,14 +631,14 @@ private fun VehicleCard(
 
             // GRID DE ESPECIFICACIONES TÉCNICAS
             val specs = listOf(
-                Triple("Cilindrada", "${vehicle.engineDisplacementLiters} L", TextWhite),
-                Triple("Depósito", "${vehicle.fuelTankCapacityLiters.toInt()} L", TextWhite),
-                Triple("Peso", "${vehicle.vehicleWeightKg.toInt()} kg", TextWhite),
-                Triple("Régimen", "${vehicle.maxRpm.toInt()} RPM", TextWhite),
-                Triple("Potencia ficha", "${vehicle.maxPowerHp.toInt()} CV", RacingOrange),
-                Triple("Par ficha", "${vehicle.maxTorqueNm.toInt()} Nm", RacingOrange),
-                Triple("Eficiencia", "${vehicle.volumetricEfficiencyPercent.toInt()}% VE", TextWhite),
-                Triple("Combustible", vehicle.fuelType.displayName.split(" ").first(), TextWhite)
+                Triple(tr("Cilindrada", "Displacement"), "${vehicle.engineDisplacementLiters} L", TextWhite),
+                Triple(tr("Depósito", "Tank"), "${vehicle.fuelTankCapacityLiters.toInt()} L", TextWhite),
+                Triple(tr("Peso", "Weight"), "${vehicle.vehicleWeightKg.toInt()} kg", TextWhite),
+                Triple(tr("Régimen", "Redline"), "${vehicle.maxRpm.toInt()} RPM", TextWhite),
+                Triple(tr("Potencia ficha", "Spec power"), "${vehicle.maxPowerHp.toInt()} ${trUnit("CV")}", RacingOrange),
+                Triple(tr("Par ficha", "Spec torque"), "${vehicle.maxTorqueNm.toInt()} Nm", RacingOrange),
+                Triple(tr("Eficiencia", "Efficiency"), "${vehicle.volumetricEfficiencyPercent.toInt()}% VE", TextWhite),
+                Triple(tr("Combustible", "Fuel"), vehicle.fuelType.shortDisplayName, TextWhite)
             )
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 specs.chunked(specColumns).forEach { row ->
@@ -633,7 +660,7 @@ private fun VehicleCard(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.CheckCircle, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("En uso por la telemetría", color = NeonGreen, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                        Text(tr("En uso por la telemetría", "In use by telemetry"), color = NeonGreen, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                     }
                 } else {
                     Button(
@@ -643,7 +670,7 @@ private fun VehicleCard(
                     ) {
                         Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.Black)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Activar este Vehículo", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(tr("Activar este Vehículo", "Activate this Vehicle"), color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -654,7 +681,7 @@ private fun VehicleCard(
                     ) {
                         Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(14.dp), tint = RacingOrange)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Editar", color = RacingOrange, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(tr("Editar", "Edit"), color = RacingOrange, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
 
                     OutlinedButton(
@@ -742,17 +769,17 @@ private fun VehicleEditDialog(
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     ResponsiveFormDialog(
-        title = if (isNew) "Añadir nuevo vehículo" else "Editar: ${profile.name}",
-        confirmLabel = "Guardar vehículo",
+        title = if (isNew) tr("Añadir nuevo vehículo", "Add new vehicle") else tr("Editar: ${profile.name}", "Edit: ${profile.name}"),
+        confirmLabel = tr("Guardar vehículo", "Save vehicle"),
         onDismiss = onDismiss,
         onConfirm = {
             if (name.isBlank()) {
-                errorMessage = "El nombre del vehículo no puede estar vacío."
+                errorMessage = tr("El nombre del vehículo no puede estar vacío.", "Vehicle name cannot be empty.")
                 return@ResponsiveFormDialog
             }
             val disp = displacement.toFloatOrNull()
             if (disp == null || disp <= 0) {
-                errorMessage = "Cilindrada inválida (ej. 2.0)."
+                errorMessage = tr("Cilindrada inválida (ej. 2.0).", "Invalid displacement (e.g. 2.0).")
                 return@ResponsiveFormDialog
             }
             val tank = tankCapacity.toFloatOrNull() ?: 50f
@@ -804,8 +831,8 @@ private fun VehicleEditDialog(
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it; errorMessage = null },
-                label = { Text("Nombre del Vehículo (Marca y Modelo)") },
-                placeholder = { Text("ej. Honda Civic 2.2 i-DTEC") },
+                label = { Text(tr("Nombre del Vehículo (Marca y Modelo)", "Vehicle Name (Make and Model)")) },
+                placeholder = { Text(tr("ej. Honda Civic 2.2 i-DTEC", "e.g. Honda Civic 2.2 i-DTEC")) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -814,23 +841,23 @@ private fun VehicleEditDialog(
                 OutlinedTextField(
                     value = year,
                     onValueChange = { year = it },
-                    label = { Text("Año") },
-                    placeholder = { Text("ej. 2012") },
+                    label = { Text(tr("Año", "Year")) },
+                    placeholder = { Text(tr("ej. 2012", "e.g. 2012")) },
                     singleLine = true,
                     modifier = Modifier.weight(1f)
                 )
                 OutlinedTextField(
                     value = displacement,
                     onValueChange = { displacement = it },
-                    label = { Text("Cilindrada (L)") },
-                    placeholder = { Text("ej. 2.2") },
+                    label = { Text(tr("Cilindrada (L)", "Displacement (L)")) },
+                    placeholder = { Text(tr("ej. 2.2", "e.g. 2.2")) },
                     singleLine = true,
                     modifier = Modifier.weight(1f)
                 )
             }
 
             // TIPO DE COMBUSTIBLE
-            Text("Tipo de Combustible:", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            Text(tr("Tipo de Combustible:", "Fuel Type:"), color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -840,7 +867,7 @@ private fun VehicleEditDialog(
                     FilterChip(
                         selected = selectedFuel == fuel,
                         onClick = { selectedFuel = fuel },
-                        label = { Text(fuel.displayName.split(" ").first(), fontSize = 10.sp, maxLines = 1) },
+                        label = { Text(fuel.shortDisplayName, fontSize = 10.sp, maxLines = 1) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = RacingOrange,
                             selectedLabelColor = Color.Black
@@ -854,16 +881,16 @@ private fun VehicleEditDialog(
                 OutlinedTextField(
                     value = tankCapacity,
                     onValueChange = { tankCapacity = it },
-                    label = { Text("Depósito (L)") },
-                    placeholder = { Text("ej. 50") },
+                    label = { Text(tr("Depósito (L)", "Tank (L)")) },
+                    placeholder = { Text(tr("ej. 50", "e.g. 50")) },
                     singleLine = true,
                     modifier = Modifier.weight(1f)
                 )
                 OutlinedTextField(
                     value = weight,
                     onValueChange = { weight = it },
-                    label = { Text("Peso vacío (kg)") },
-                    placeholder = { Text("ej. 1450") },
+                    label = { Text(tr("Peso vacío (kg)", "Curb weight (kg)")) },
+                    placeholder = { Text(tr("ej. 1450", "e.g. 1450")) },
                     singleLine = true,
                     modifier = Modifier.weight(1f)
                 )
@@ -874,16 +901,16 @@ private fun VehicleEditDialog(
                 OutlinedTextField(
                     value = maxPowerHp,
                     onValueChange = { maxPowerHp = it },
-                    label = { Text("Potencia Máx (CV)") },
-                    placeholder = { Text("ej. 150") },
+                    label = { Text(tr("Potencia Máx (CV)", "Max Power (HP)")) },
+                    placeholder = { Text(tr("ej. 150", "e.g. 150")) },
                     singleLine = true,
                     modifier = Modifier.weight(1f)
                 )
                 OutlinedTextField(
                     value = maxTorqueNm,
                     onValueChange = { maxTorqueNm = it },
-                    label = { Text("Par Máx (Nm)") },
-                    placeholder = { Text("ej. 350") },
+                    label = { Text(tr("Par Máx (Nm)", "Max Torque (Nm)")) },
+                    placeholder = { Text(tr("ej. 350", "e.g. 350")) },
                     singleLine = true,
                     modifier = Modifier.weight(1f)
                 )
@@ -895,15 +922,15 @@ private fun VehicleEditDialog(
                     value = maxRpm,
                     onValueChange = { maxRpm = it },
                     label = { Text("Redline (RPM)") },
-                    placeholder = { Text("ej. 5000") },
+                    placeholder = { Text(tr("ej. 5000", "e.g. 5000")) },
                     singleLine = true,
                     modifier = Modifier.weight(1f)
                 )
                 OutlinedTextField(
                     value = volumetricEfficiency,
                     onValueChange = { volumetricEfficiency = it },
-                    label = { Text("Eficiencia (%)") },
-                    placeholder = { Text("ej. 85") },
+                    label = { Text(tr("Eficiencia (%)", "Efficiency (%)")) },
+                    placeholder = { Text(tr("ej. 85", "e.g. 85")) },
                     singleLine = true,
                     modifier = Modifier.weight(1f)
                 )
@@ -913,8 +940,8 @@ private fun VehicleEditDialog(
             OutlinedTextField(
                 value = initCommands,
                 onValueChange = { initCommands = it },
-                label = { Text("Comandos Init ELM327 (Opcional)") },
-                placeholder = { Text("ej. AT SP7\\nAT SH DA10F1") },
+                label = { Text(tr("Comandos Init ELM327 (Opcional)", "ELM327 Init Commands (Optional)")) },
+                placeholder = { Text(tr("ej. AT SP7\\nAT SH DA10F1", "e.g. AT SP7\\nAT SH DA10F1")) },
                 singleLine = false,
                 maxLines = 2,
                 modifier = Modifier.fillMaxWidth()
@@ -927,7 +954,7 @@ private fun VehicleEditDialog(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Establecer como Vehículo ACTIVO",
+                    text = tr("Establecer como Vehículo ACTIVO", "Set as ACTIVE Vehicle"),
                     modifier = Modifier.weight(1f),
                     color = TextWhite,
                     fontSize = 12.sp,
@@ -947,10 +974,72 @@ private fun VehicleEditDialog(
 }
 
 /**
- * Diálogo de Política de Privacidad y Permisos (Requisito Google Play Store).
+ * Datos oficiales de contacto de desarrollador y URLs públicas HTTPS (GitHub Pages / Soporte)
+ * para Google Play Console y el diálogo de Política de Privacidad.
  */
+object AppPrivacyPolicy {
+    const val APP_NAME = "StradaOBD"
+    const val APPLICATION_ID = "com.stradaobd.dash"
+    const val DEVELOPER_NAME = "Alberto Villa (albertovilla5)"
+    const val DEVELOPER_GITHUB_URL = "https://github.com/albertovilla5"
+    const val DEVELOPER_CONTACT_EMAIL = "22d7rrcwzm@privaterelay.appleid.com"
+    const val PRIVACY_POLICY_URL = "https://albertovilla5.github.io/stradaobd/privacy-policy.html"
+    const val PUBLIC_PORTAL_URL = "https://albertovilla5.github.io/stradaobd/"
+    const val GITHUB_SUPPORT_URL = "https://github.com/albertovilla5/stradaobd/issues"
+
+    fun openExternalUrlOrCopy(context: Context, url: String, label: String): String {
+        return try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            tr("Abriendo $label...", "Opening $label...")
+        } catch (_: Exception) {
+            copyToClipboard(context, label, url)
+            val msg = tr(
+                "No se encontró navegador web. Enlace copiado al portapapeles: $url",
+                "No web browser found. Link copied to clipboard: $url"
+            )
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            msg
+        }
+    }
+
+    fun openContactEmailOrCopy(context: Context): String {
+        return try {
+            val intent = Intent(Intent.ACTION_SENDTO).apply {
+                data = Uri.parse("mailto:$DEVELOPER_CONTACT_EMAIL")
+                putExtra(Intent.EXTRA_SUBJECT, "$APP_NAME ($APPLICATION_ID) — Soporte / Privacidad")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            tr("Abriendo cliente de correo...", "Opening email client...")
+        } catch (_: Exception) {
+            copyToClipboard(context, "Email", DEVELOPER_CONTACT_EMAIL)
+            val msg = tr(
+                "Correo de contacto copiado al portapapeles: $DEVELOPER_CONTACT_EMAIL",
+                "Contact email copied to clipboard: $DEVELOPER_CONTACT_EMAIL"
+            )
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            msg
+        }
+    }
+
+    private fun copyToClipboard(context: Context, label: String, value: String) {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        clipboard?.setPrimaryClip(ClipData.newPlainText(label, value))
+    }
+}
+
+/**
+ * Diálogo de Política de Privacidad, Seguridad Vial y Contacto (Requisito Google Play Store).
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun PrivacyPolicyDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    var linkFeedback by remember { mutableStateOf<String?>(null) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = CardBackground,
@@ -958,7 +1047,12 @@ internal fun PrivacyPolicyDialog(onDismiss: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Security, contentDescription = null, tint = RacingOrange)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Política de Privacidad y Permisos", color = TextWhite, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    tr("Política de Privacidad y Contacto", "Privacy Policy & Contact"),
+                    color = TextWhite,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         },
         text = {
@@ -969,48 +1063,179 @@ internal fun PrivacyPolicyDialog(onDismiss: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "1. Uso de Permisos Bluetooth y Ubicación:",
+                    text = tr("1. Uso de Permisos Bluetooth y Ubicación:", "1. Bluetooth and Location Permissions:"),
                     color = RacingOrange,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Android requiere permisos de dispositivos cercanos y localización para detectar y emparejar adaptadores ELM327 Bluetooth (SPP) y Wi-Fi. La aplicación NUNCA rastrea ni almacena tu ubicación geográfica.",
+                    text = tr(
+                        "Android requiere permisos de dispositivos cercanos y localización (solo en Android 6–11) para detectar y emparejar adaptadores ELM327 Bluetooth (SPP) y Wi-Fi. En Android 12+ se declara neverForLocation. La aplicación NUNCA rastrea, lee ni almacena tu ubicación geográfica.",
+                        "Android requires nearby devices and location permissions (Android 6–11 only) to discover and pair Bluetooth (SPP) and Wi-Fi ELM327 adapters. On Android 12+, neverForLocation is declared. The app NEVER tracks, reads or stores your geographic location."
+                    ),
                     color = TextWhite,
                     fontSize = 12.sp,
                     lineHeight = 16.sp
                 )
 
                 Text(
-                    text = "2. Almacenamiento y Telemetría Vehicular:",
+                    text = tr("2. Almacenamiento, Copias de Seguridad y Telemetría:", "2. Storage, Backups and Vehicle Telemetry:"),
                     color = RacingOrange,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Todos los parámetros OBD2 (velocidad, RPM, presión DPF, temperaturas) y perfiles del vehículo se procesan y almacenan únicamente en la memoria local privada de tu teléfono. No se envían a ningún servidor en la nube ni se comparten con terceros.",
+                    text = tr(
+                        "Todos los parámetros OBD2 y grabaciones de telemetría se procesan y almacenan en la memoria privada de tu dispositivo sin enviarse a servidores de terceros. La configuración del usuario (perfiles de vehículos, pantallas a medida, sensores, avisos e idioma) puede respaldarse mediante la copia automática cifrada de Android (Google Drive del usuario) o exportarse manualmente en un archivo JSON, excluyendo siempre direcciones MAC Bluetooth, IP Wi-Fi y sesiones CSV.",
+                        "All OBD2 parameters and telemetry recordings are processed and stored in your device's private storage and are never sent to third-party servers. User configuration (vehicle profiles, custom dashboards, sensors, alerts and language) may be backed up via Android's encrypted Auto Backup (to the user's Google Drive) or manually exported as a JSON file, always excluding Bluetooth MAC, Wi-Fi IP addresses and CSV recordings."
+                    ),
                     color = TextWhite,
                     fontSize = 12.sp,
                     lineHeight = 16.sp
                 )
 
                 Text(
-                    text = "3. Sin Anuncios ni Rastreadores:",
+                    text = tr("3. Sin Anuncios ni Rastreadores:", "3. No Ads or Trackers:"),
                     color = RacingOrange,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Esta aplicación no contiene kits de desarrollo de software (SDK) de publicidad ni análisis de comportamiento que recopilen telemetría del usuario.",
+                    text = tr(
+                        "Esta aplicación no contiene kits de desarrollo de software (SDK) de publicidad ni análisis de comportamiento que recopilen telemetría del usuario, ni utiliza el identificador publicitario de Android (AD_ID).",
+                        "This app contains no advertising or behavioral analytics SDKs that collect user telemetry, and does not use the Android Advertising ID (AD_ID)."
+                    ),
                     color = TextWhite,
                     fontSize = 12.sp,
                     lineHeight = 16.sp
                 )
+
+                Text(
+                    text = tr("4. Seguridad Vial y Responsabilidad de Uso:", "4. Road Safety and Usage Disclaimer:"),
+                    color = RacingOrange,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = tr(
+                        "El conductor es el único responsable de mantener la atención en la carretera. No manipules la aplicación ni edites pantallas con el vehículo en movimiento. El borrado de averías (Modo 04, con contacto encendido y motor parado) y el envío de comandos AT/OBD se realizan bajo la exclusiva responsabilidad del usuario.",
+                        "The driver is solely responsible for maintaining full attention on the road. Do not manipulate the app or edit dashboards while the vehicle is moving. Clearing fault codes (Mode 04, ignition ON and engine OFF) and sending custom AT/OBD commands are performed at the user's sole responsibility."
+                    ),
+                    color = TextWhite,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp
+                )
+
+                Text(
+                    text = tr("5. Contacto del Desarrollador y URL Pública HTTPS:", "5. Developer Contact & Public HTTPS URL:"),
+                    color = RacingOrange,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(DarkSurface)
+                        .border(1.dp, Color(0xFF293341), RoundedCornerShape(8.dp))
+                        .padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = tr(
+                            "Desarrollador: ${AppPrivacyPolicy.DEVELOPER_NAME}",
+                            "Developer: ${AppPrivacyPolicy.DEVELOPER_NAME}"
+                        ),
+                        color = TextWhite,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = tr(
+                            "Correo: ${AppPrivacyPolicy.DEVELOPER_CONTACT_EMAIL}",
+                            "Email: ${AppPrivacyPolicy.DEVELOPER_CONTACT_EMAIL}"
+                        ),
+                        color = NeonCyan,
+                        fontSize = 11.sp
+                    )
+                    Text(
+                        text = tr(
+                            "Soporte GitHub: ${AppPrivacyPolicy.GITHUB_SUPPORT_URL}",
+                            "GitHub Support: ${AppPrivacyPolicy.GITHUB_SUPPORT_URL}"
+                        ),
+                        color = TextMuted,
+                        fontSize = 11.sp
+                    )
+                    Text(
+                        text = tr(
+                            "Política Web (HTTPS): ${AppPrivacyPolicy.PRIVACY_POLICY_URL}",
+                            "Web Policy (HTTPS): ${AppPrivacyPolicy.PRIVACY_POLICY_URL}"
+                        ),
+                        color = TextMuted,
+                        fontSize = 11.sp
+                    )
+                }
+
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            linkFeedback = AppPrivacyPolicy.openExternalUrlOrCopy(
+                                context,
+                                AppPrivacyPolicy.PRIVACY_POLICY_URL,
+                                tr("Política de Privacidad Web", "Web Privacy Policy")
+                            )
+                        },
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(14.dp), tint = NeonCyan)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(tr("Política Web (HTTPS)", "Web Policy (HTTPS)"), color = NeonCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            linkFeedback = AppPrivacyPolicy.openExternalUrlOrCopy(
+                                context,
+                                AppPrivacyPolicy.GITHUB_SUPPORT_URL,
+                                tr("Soporte en GitHub", "GitHub Support")
+                            )
+                        },
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.BugReport, contentDescription = null, modifier = Modifier.size(14.dp), tint = RacingOrange)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(tr("Soporte GitHub", "GitHub Support"), color = RacingOrange, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            linkFeedback = AppPrivacyPolicy.openContactEmailOrCopy(context)
+                        },
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(14.dp), tint = TextWhite)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(tr("Contacto Email", "Email Contact"), color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                if (linkFeedback != null) {
+                    Text(
+                        text = linkFeedback ?: "",
+                        color = NeonGreen,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cerrar", color = RacingOrange, fontWeight = FontWeight.Bold)
+                Text(tr("Cerrar", "Close"), color = RacingOrange, fontWeight = FontWeight.Bold)
             }
         }
     )

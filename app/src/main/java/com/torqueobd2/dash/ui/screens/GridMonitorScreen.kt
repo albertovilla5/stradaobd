@@ -95,31 +95,40 @@ fun GridMonitorScreen(
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 if (!LocalCarMode.current || !toolbarNarrow) Column(Modifier.weight(1f)) {
-                    Text("${rows.size}/${availablePids.size} sensores · $availableCount disponibles", color = TextWhite,
-                        fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        com.torqueobd2.dash.i18n.tr(
+                            "${rows.size}/${availablePids.size} sensores · $availableCount disponibles",
+                            "${rows.size}/${availablePids.size} sensors · $availableCount available"
+                        ),
+                        color = TextWhite,
+                        fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis
+                    )
                     Text(when {
-                        connectionState.status != ConnectionStatus.CONNECTED -> "Conecta el OBD para comprobar lecturas"
-                        connectionState.type == ConnectionType.SIMULATION -> "Simulación · datos ficticios"
-                        else -> "${availablePids.count { it.isEnabled }} activos · Disponible = lectura ECU reciente"
+                        connectionState.status != ConnectionStatus.CONNECTED -> com.torqueobd2.dash.i18n.tr("Conecta el OBD para comprobar lecturas", "Connect OBD to check readings")
+                        connectionState.type == ConnectionType.SIMULATION -> com.torqueobd2.dash.i18n.tr("Simulación · datos ficticios", "Simulation · demo data")
+                        else -> com.torqueobd2.dash.i18n.tr(
+                            "${availablePids.count { it.isEnabled }} activos · Disponible = lectura ECU reciente",
+                            "${availablePids.count { it.isEnabled }} active · Available = recent ECU reading"
+                        )
                     }, color = TextMuted, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 IconButton(onClick = { showSearch = !showSearch; if (!showSearch) query = "" }) {
-                    Icon(Icons.Default.Search, "Buscar sensores", Modifier.size(18.dp), tint = if (showSearch) NeonCyan else TextMuted)
+                    Icon(Icons.Default.Search, com.torqueobd2.dash.i18n.tr("Buscar sensores", "Search sensors"), Modifier.size(18.dp), tint = if (showSearch) NeonCyan else TextMuted)
                 }
                 Box {
                     IconButton(onClick = { showFilters = true }) {
-                        Icon(Icons.Default.FilterList, "Filtrar sensores", Modifier.size(18.dp),
+                        Icon(Icons.Default.FilterList, com.torqueobd2.dash.i18n.tr("Filtrar sensores", "Filter sensors"), Modifier.size(18.dp),
                             tint = if (onlyAvailable || onlyEnabled || onlyCompatible || category != null) NeonCyan else TextMuted)
                     }
                     DropdownMenu(showFilters, { showFilters = false }) {
-                        DropdownMenuItem(text = { Text(if (onlyAvailable) "✓ Solo disponibles" else "Solo disponibles") },
+                        DropdownMenuItem(text = { Text(if (onlyAvailable) com.torqueobd2.dash.i18n.tr("✓ Solo disponibles", "✓ Available only") else com.torqueobd2.dash.i18n.tr("Solo disponibles", "Available only")) },
                             onClick = { onlyAvailable = !onlyAvailable; showFilters = false })
-                        DropdownMenuItem(text = { Text(if (onlyEnabled) "✓ Solo activos" else "Solo activos") },
+                        DropdownMenuItem(text = { Text(if (onlyEnabled) com.torqueobd2.dash.i18n.tr("✓ Solo activos", "✓ Active only") else com.torqueobd2.dash.i18n.tr("Solo activos", "Active only")) },
                             onClick = { onlyEnabled = !onlyEnabled; showFilters = false })
-                        DropdownMenuItem(text = { Text(if (onlyCompatible) "✓ PIDs compatibles" else "PIDs compatibles") },
+                        DropdownMenuItem(text = { Text(if (onlyCompatible) com.torqueobd2.dash.i18n.tr("✓ PIDs compatibles", "✓ Supported PIDs") else com.torqueobd2.dash.i18n.tr("PIDs compatibles", "Supported PIDs")) },
                             onClick = { onlyCompatible = !onlyCompatible; showFilters = false })
                         HorizontalDivider()
-                        DropdownMenuItem(text = { Text(if (category == null) "✓ Todas las categorías" else "Todas las categorías") },
+                        DropdownMenuItem(text = { Text(if (category == null) com.torqueobd2.dash.i18n.tr("✓ Todas las categorías", "✓ All categories") else com.torqueobd2.dash.i18n.tr("Todas las categorías", "All categories")) },
                             onClick = { category = null; showFilters = false })
                         PidCategory.entries.forEach { entry ->
                             DropdownMenuItem(text = { Text((if (category == entry) "✓ " else "") + entry.title) },
@@ -130,25 +139,32 @@ fun GridMonitorScreen(
                 IconButton(onClick = onScanSensors,
                     enabled = connectionState.status == ConnectionStatus.CONNECTED && !isScanningSensors) {
                     if (isScanningSensors) CircularProgressIndicator(Modifier.size(16.dp), color = NeonCyan, strokeWidth = 2.dp)
-                    else Icon(Icons.Default.Refresh, "Escanear ECU", Modifier.size(18.dp))
+                    else Icon(Icons.Default.Refresh, com.torqueobd2.dash.i18n.tr("Escanear ECU", "Scan ECU"), Modifier.size(18.dp))
                 }
                 catalogAction?.invoke()
             }
-            if (LocalCarMode.current && toolbarNarrow) Text("${rows.size} sensores · $availableCount disponibles", color = TextMuted, fontSize = 24.sp)
+            if (LocalCarMode.current && toolbarNarrow) Text(
+                com.torqueobd2.dash.i18n.tr("${rows.size} sensores · $availableCount disponibles", "${rows.size} sensors · $availableCount available"),
+                color = TextMuted, fontSize = 24.sp
+            )
             if (showSearch) {
                 OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp), singleLine = true,
-                    placeholder = { Text("Buscar sensor, PID o unidad", fontSize = 12.sp) },
+                    placeholder = { Text(com.torqueobd2.dash.i18n.tr("Buscar sensor, PID o unidad", "Search sensor, PID or unit"), fontSize = 12.sp) },
                     trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) {
-                        Icon(Icons.Default.Close, "Limpiar búsqueda", Modifier.size(18.dp))
+                        Icon(Icons.Default.Close, com.torqueobd2.dash.i18n.tr("Limpiar búsqueda", "Clear search"), Modifier.size(18.dp))
                     } })
             }
             if (onlyAvailable || onlyEnabled || onlyCompatible || category != null) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(listOfNotNull(category?.title, if (onlyAvailable) "Disponibles" else null,
-                        if (onlyEnabled) "Activos" else null, if (onlyCompatible) "Compatibles" else null).joinToString(" · "),
+                    Text(listOfNotNull(
+                        category?.title,
+                        if (onlyAvailable) com.torqueobd2.dash.i18n.tr("Disponibles", "Available") else null,
+                        if (onlyEnabled) com.torqueobd2.dash.i18n.tr("Activos", "Active") else null,
+                        if (onlyCompatible) com.torqueobd2.dash.i18n.tr("Compatibles", "Supported") else null
+                    ).joinToString(" · "),
                         Modifier.weight(1f), fontSize = 11.sp, color = NeonCyan, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     TextButton(onClick = { onlyAvailable = false; onlyEnabled = false; onlyCompatible = false; category = null }) {
-                        Text("Quitar filtros", fontSize = 11.sp)
+                        Text(com.torqueobd2.dash.i18n.tr("Quitar filtros", "Clear filters"), fontSize = 11.sp)
                     }
                 }
             }
@@ -165,8 +181,11 @@ fun GridMonitorScreen(
                     }
                 }
                 if (rows.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
-                    Text(if (onlyAvailable) "Todavía no hay lecturas disponibles con estos filtros." else "No hay sensores que coincidan.",
-                        Modifier.padding(vertical = 16.dp), color = TextMuted, fontSize = 12.sp)
+                    Text(
+                        if (onlyAvailable) com.torqueobd2.dash.i18n.tr("Todavía no hay lecturas disponibles con estos filtros.", "No readings available with these filters yet.")
+                        else com.torqueobd2.dash.i18n.tr("No hay sensores que coincidan.", "No matching sensors found."),
+                        Modifier.padding(vertical = 16.dp), color = TextMuted, fontSize = 12.sp
+                    )
                 }
             }
         }
@@ -181,20 +200,20 @@ fun GridMonitorScreen(
                     Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(pid.name, color = TextWhite, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        Text("${reading?.formatted() ?: "—"} ${pid.units}".trim(), color = TextWhite, fontSize = 22.sp)
+                        Text("${reading?.formatted() ?: "—"} ${com.torqueobd2.dash.i18n.trUnit(pid.units)}".trim(), color = TextWhite, fontSize = 22.sp)
                         Text(statuses.getValue(pid.id).label, color = statusColor(statuses.getValue(pid.id)))
                         Text(statuses.getValue(pid.id).detail, color = TextMuted, fontSize = 12.sp)
                         Text("ID: ${pid.id}", color = TextMuted, fontSize = 10.sp)
                         Text("${pid.category.title} · ${pid.supportDescription}", color = TextMuted, fontSize = 12.sp)
-                        Text("PID ${pid.cleanObdCommand()} · ${if (pid.isCustom) "Personalizado / CSV" else "OBD estándar"}", color = TextMuted, fontSize = 12.sp)
-                        Text("Ecuación: ${pid.equation}" + if (pid.header.isNotBlank()) "\nCabecera ECU: ${pid.header}" else "",
+                        Text("PID ${pid.cleanObdCommand()} · ${if (pid.isCustom) com.torqueobd2.dash.i18n.tr("Personalizado / CSV", "Custom / CSV") else com.torqueobd2.dash.i18n.tr("OBD estándar", "Standard OBD")}", color = TextMuted, fontSize = 12.sp)
+                        Text("${com.torqueobd2.dash.i18n.tr("Ecuación", "Equation")}: ${pid.equation}" + if (pid.header.isNotBlank()) "\n${com.torqueobd2.dash.i18n.tr("Cabecera ECU", "ECU Header")}: ${pid.header}" else "",
                             color = TextMuted, fontSize = 12.sp)
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Text("Consultar este sensor", Modifier.weight(1f), color = TextWhite)
+                            Text(com.torqueobd2.dash.i18n.tr("Consultar este sensor", "Poll this sensor"), Modifier.weight(1f), color = TextWhite)
                             Switch(pid.isEnabled, { onTogglePid(pid.id, it) })
                         }
                     }
-                    TextButton(onClick = { selectedPidId = null }, modifier = Modifier.align(Alignment.End)) { Text("Cerrar") }
+                    TextButton(onClick = { selectedPidId = null }, modifier = Modifier.align(Alignment.End)) { Text(com.torqueobd2.dash.i18n.tr("Cerrar", "Close")) }
                 }
             }
         }
@@ -206,9 +225,9 @@ private fun SensorTableHeader(modifier: Modifier) {
     Row(modifier.padding(end = 6.dp, top = 5.dp, bottom = 5.dp)) {
         Text("ON", Modifier.width(48.dp), color = TextMuted, fontSize = 9.sp, textAlign = TextAlign.Center)
         Text("SENSOR / PID", Modifier.weight(0.46f), color = TextMuted, fontSize = 9.sp)
-        Text("VALOR", Modifier.weight(0.27f), color = TextMuted, fontSize = 9.sp, textAlign = TextAlign.End)
+        Text(com.torqueobd2.dash.i18n.tr("VALOR", "VALUE"), Modifier.weight(0.27f), color = TextMuted, fontSize = 9.sp, textAlign = TextAlign.End)
         Spacer(Modifier.width(8.dp))
-        Text("ESTADO", Modifier.weight(0.27f), color = TextMuted, fontSize = 9.sp)
+        Text(com.torqueobd2.dash.i18n.tr("ESTADO", "STATUS"), Modifier.weight(0.27f), color = TextMuted, fontSize = 9.sp)
     }
 }
 
@@ -230,7 +249,9 @@ private fun CompactSensorRow(
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             IconToggleButton(pid.isEnabled, onToggle) {
                 Icon(if (pid.isEnabled) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
-                    if (pid.isEnabled) "Desactivar ${pid.shortName}" else "Activar ${pid.shortName}", tint = if (pid.isEnabled) NeonCyan else TextMuted)
+                    if (pid.isEnabled) com.torqueobd2.dash.i18n.tr("Desactivar ${pid.shortName}", "Disable ${pid.shortName}")
+                    else com.torqueobd2.dash.i18n.tr("Activar ${pid.shortName}", "Enable ${pid.shortName}"),
+                    tint = if (pid.isEnabled) NeonCyan else TextMuted)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(pid.shortName, color = TextWhite, fontSize = 24.sp, maxLines = 2)
@@ -238,7 +259,7 @@ private fun CompactSensorRow(
             }
             Column(Modifier.widthIn(min = 76.dp, max = 116.dp), horizontalAlignment = Alignment.End) {
                 FittedValue(reading?.formatted() ?: "—", 32.sp, color = TextWhite, textAlign = TextAlign.End)
-                Text(pid.units, color = TextMuted, fontSize = 24.sp)
+                Text(com.torqueobd2.dash.i18n.trUnit(pid.units), color = TextMuted, fontSize = 24.sp)
             }
         }
         return
@@ -247,7 +268,8 @@ private fun CompactSensorRow(
         .clickable(onClick = onClick).heightIn(min = 48.dp).padding(end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         IconToggleButton(checked = pid.isEnabled, onCheckedChange = onToggle, modifier = Modifier.size(48.dp)) {
             Icon(if (pid.isEnabled) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
-                if (pid.isEnabled) "Desactivar ${pid.shortName}" else "Activar ${pid.shortName}",
+                if (pid.isEnabled) com.torqueobd2.dash.i18n.tr("Desactivar ${pid.shortName}", "Disable ${pid.shortName}")
+                else com.torqueobd2.dash.i18n.tr("Activar ${pid.shortName}", "Enable ${pid.shortName}"),
                 Modifier.size(18.dp), tint = if (pid.isEnabled) NeonCyan else TextMuted)
         }
         Column(Modifier.weight(0.46f).padding(vertical = 3.dp)) {
@@ -255,7 +277,7 @@ private fun CompactSensorRow(
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(pid.cleanObdCommand(), color = TextMuted, fontSize = 9.sp, maxLines = 1)
         }
-        FittedValue("${reading?.formatted() ?: "—"} ${pid.units}".trim(), 14.sp, Modifier.weight(0.27f),
+        FittedValue("${reading?.formatted() ?: "—"} ${com.torqueobd2.dash.i18n.trUnit(pid.units)}".trim(), 14.sp, Modifier.weight(0.27f),
             color = if (reading != null) TextWhite else TextMuted, textAlign = TextAlign.End)
         Spacer(Modifier.width(8.dp))
         Text(status.label, Modifier.weight(0.27f), color = statusColor(status), fontSize = 10.sp,

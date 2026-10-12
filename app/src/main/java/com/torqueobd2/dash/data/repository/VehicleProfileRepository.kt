@@ -10,6 +10,7 @@ import com.torqueobd2.dash.data.model.FuelType
 import com.torqueobd2.dash.data.model.VehicleProfile
 import com.torqueobd2.dash.data.model.WidgetSize
 import com.torqueobd2.dash.data.model.WidgetType
+import com.torqueobd2.dash.i18n.tr
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -92,7 +93,8 @@ class VehicleProfileRepository(private val prefs: SharedPreferences) {
     fun getActiveVehicle(): VehicleProfile {
         val activeId = getActiveVehicleId()
         val vehicles = getAllVehicles()
-        return vehicles.find { it.id == activeId } ?: vehicles.firstOrNull() ?: VehicleProfile(name = "Sin vehículo", customInitCommands = "")
+        return vehicles.find { it.id == activeId } ?: vehicles.firstOrNull()
+            ?: VehicleProfile(name = tr("Sin vehículo", "No vehicle"), customInitCommands = "")
     }
 
     @Synchronized
@@ -118,7 +120,8 @@ class VehicleProfileRepository(private val prefs: SharedPreferences) {
     @Synchronized
     fun setActiveVehicle(profileId: String): VehicleProfile {
         val vehicles = getAllVehicles()
-        val target = vehicles.find { it.id == profileId } ?: vehicles.firstOrNull() ?: VehicleProfile(name = "Sin vehículo", customInitCommands = "")
+        val target = vehicles.find { it.id == profileId } ?: vehicles.firstOrNull()
+            ?: VehicleProfile(name = tr("Sin vehículo", "No vehicle"), customInitCommands = "")
         prefs.edit()
             .putString("active_vehicle_id", target.id)
             .putString("veh_name", target.name)
@@ -132,6 +135,16 @@ class VehicleProfileRepository(private val prefs: SharedPreferences) {
             .putBoolean("veh_hide_unsupported", target.hideUnsupportedSensors)
             .apply()
         return target
+    }
+
+    @Synchronized
+    fun replaceAllVehicles(vehicles: List<VehicleProfile>, activeVehicleId: String? = null): VehicleProfile {
+        val distinct = vehicles.distinctBy { it.id }
+        saveAllVehicles(distinct)
+        val targetId = activeVehicleId?.takeIf { id -> distinct.any { it.id == id } }
+            ?: distinct.firstOrNull()?.id
+            ?: ""
+        return setActiveVehicle(targetId)
     }
 
     @Synchronized

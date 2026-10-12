@@ -33,9 +33,9 @@ fun SportDashboardScreen(
     var throttleExpanded by rememberSaveable { mutableStateOf(false) }
     val charts: @Composable (Modifier) -> Unit = { chartModifier ->
         Column(chartModifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            RealtimeChart(if (vehicleState.rpm.isFinite()) "Régimen motor" else "RPM · ${rpmStatus.label}", vehicleState.sparklineHistory[SensorIds.RPM] ?: emptyList(),
+            RealtimeChart(if (vehicleState.rpm.isFinite()) com.torqueobd2.dash.i18n.tr("Régimen motor", "Engine RPM") else "RPM · ${rpmStatus.label}", vehicleState.sparklineHistory[SensorIds.RPM] ?: emptyList(),
                 vehicleState.rpm.telemetryText(), "RPM", RacingOrange, modifier = Modifier.weight(1f).fillMaxWidth())
-            RealtimeChart(if (vehicleState.speedKmh.isFinite()) "Velocidad" else "Velocidad · ${speedStatus.label}", vehicleState.sparklineHistory[SensorIds.SPEED] ?: emptyList(),
+            RealtimeChart(if (vehicleState.speedKmh.isFinite()) com.torqueobd2.dash.i18n.tr("Velocidad", "Speed") else "${com.torqueobd2.dash.i18n.tr("Velocidad", "Speed")} · ${speedStatus.label}", vehicleState.sparklineHistory[SensorIds.SPEED] ?: emptyList(),
                 vehicleState.speedKmh.telemetryText(), "km/h", NeonCyan, modifier = Modifier.weight(1f).fillMaxWidth())
         }
     }
@@ -52,9 +52,9 @@ fun SportDashboardScreen(
                             coolantTempC = vehicleState.coolantTempC, batteryVoltage = vehicleState.batteryVoltage,
                             speedStatus = speedStatus.label, rpmStatus = rpmStatus.label)
                         Row(Modifier.weight(0.85f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            TelemetryMetric("Refrigerante", vehicleState.coolantTempC.telemetryText(),
+                            TelemetryMetric(com.torqueobd2.dash.i18n.tr("Refrigerante", "Coolant"), vehicleState.coolantTempC.telemetryText(),
                                 if (vehicleState.coolantTempC.isFinite()) "°C" else coolantStatus.label, Modifier.weight(1f).fillMaxHeight())
-                            TelemetryMetric("Voltaje ECU", vehicleState.batteryVoltage.telemetryText(),
+                            TelemetryMetric(com.torqueobd2.dash.i18n.tr("Voltaje ECU", "ECU Voltage"), vehicleState.batteryVoltage.telemetryText(),
                                 if (vehicleState.batteryVoltage.isFinite()) "V" else voltageStatus.label, Modifier.weight(1f).fillMaxHeight(), accent = NeonCyan)
                         }
                     }
@@ -65,9 +65,9 @@ fun SportDashboardScreen(
                     coolantTempC = vehicleState.coolantTempC, batteryVoltage = vehicleState.batteryVoltage,
                     speedStatus = speedStatus.label, rpmStatus = rpmStatus.label)
                 Row(Modifier.weight(0.5f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    TelemetryMetric("Refrigerante", vehicleState.coolantTempC.telemetryText(),
+                    TelemetryMetric(com.torqueobd2.dash.i18n.tr("Refrigerante", "Coolant"), vehicleState.coolantTempC.telemetryText(),
                         if (vehicleState.coolantTempC.isFinite()) "°C" else coolantStatus.label, Modifier.weight(1f).fillMaxHeight())
-                    TelemetryMetric("Voltaje ECU", vehicleState.batteryVoltage.telemetryText(),
+                    TelemetryMetric(com.torqueobd2.dash.i18n.tr("Voltaje ECU", "ECU Voltage"), vehicleState.batteryVoltage.telemetryText(),
                         if (vehicleState.batteryVoltage.isFinite()) "V" else voltageStatus.label, Modifier.weight(1f).fillMaxHeight(), accent = NeonCyan)
                 }
                 charts(Modifier.weight(1f).fillMaxWidth())

@@ -22,11 +22,11 @@ fun ControlPedalSlider(onThrottleChanged: (Float?) -> Unit, modifier: Modifier =
     Column(modifier.fillMaxWidth().racingPanel(12.dp).padding(horizontal = 12.dp, vertical = 3.dp)) {
         Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Simulador de conducción", color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                Text(if (manual) "Acelerador manual" else "Ciclo automático", color = TextMuted, fontSize = 10.sp)
+                Text(com.torqueobd2.dash.i18n.tr("Simulador de conducción", "Driving simulator"), color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text(if (manual) com.torqueobd2.dash.i18n.tr("Acelerador manual", "Manual throttle") else com.torqueobd2.dash.i18n.tr("Ciclo automático", "Automatic cycle"), color = TextMuted, fontSize = 10.sp)
             }
             TextButton(onClick = { manual = !manual; onThrottleChanged(if (manual) throttle else null) }) {
-                Text(if (manual) "Usar automático" else "Control manual", color = RacingOrange, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Text(if (manual) com.torqueobd2.dash.i18n.tr("Usar automático", "Use automatic") else com.torqueobd2.dash.i18n.tr("Control manual", "Manual control"), color = RacingOrange, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             }
         }
         if (manual) {
